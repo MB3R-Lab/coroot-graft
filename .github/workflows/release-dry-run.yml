@@ -1,0 +1,94 @@
+name: Release Dry Run
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/release*.yml"
+      - ".goreleaser.yaml"
+      - "build/Dockerfile"
+      - "charts/coroot-graft/**"
+      - "versions/toolchain.env"
+      - "compatibility-manifest.json"
+      - "README.md"
+      - "docs/install.md"
+      - "docs/release-assets.md"
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Helm
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DESIRED_VERSION="v3.19.1"
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Install GoReleaser
+        run: go install github.com/goreleaser/goreleaser/v2@v2.14.3
+
+      - name: Install Syft
+        run: go install github.com/anchore/syft/cmd/syft@v1.40.0
+
+      - name: Add Go bin to PATH
+        shell: bash
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Load pinned toolchain versions
+        run: cat versions/toolchain.env >> "$GITHUB_ENV"
+
+      - name: Run full test suite
+        run: go test -count=1 ./...
+
+      - name: Build release archives snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RELEASE_VERSION="0.0.0-dry-run"
+          goreleaser release --clean --snapshot --skip=publish
+
+      - name: Package Helm chart
+        run: |
+          mkdir -p dist/charts
+          helm package charts/coroot-graft --destination dist/charts
+
+      - name: Build OCI image locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            --file build/Dockerfile \
+            --tag coroot-graft:release-dry-run \
+            --build-arg VERSION=0.0.0-dry-run \
+            --build-arg COMMIT="$(git rev-parse HEAD)" \
+            --build-arg BUILD_DATE="$(git show -s --format=%cI HEAD)" \
+            --build-arg BERING_REPOSITORY="${BERING_REPOSITORY}" \
+            --build-arg BERING_REF="${BERING_REF}" \
+            --build-arg SHEAFT_REPOSITORY="${SHEAFT_REPOSITORY}" \
+            --build-arg SHEAFT_REF="${SHEAFT_REF}" \
+            --load \
+            .

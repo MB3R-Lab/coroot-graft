@@ -10,6 +10,28 @@
 
 The recommended production path is the Helm chart in `charts/coroot-graft`.
 
+Published package entrypoints:
+
+- GitHub Releases for cross-platform CLI archives
+- `ghcr.io/mb3r-lab/coroot-graft` for the runtime OCI image
+- `oci://ghcr.io/mb3r-lab/charts/coroot-graft` for the Helm chart
+
+Example image pull:
+
+```bash
+docker pull ghcr.io/mb3r-lab/coroot-graft:v0.1.1
+```
+
+Example OCI chart install:
+
+```bash
+helm upgrade --install coroot-graft oci://ghcr.io/mb3r-lab/charts/coroot-graft \
+  --version 0.1.1 \
+  --namespace coroot-graft \
+  --create-namespace \
+  --set secrets.existingSecret=coroot-graft-secrets
+```
+
 Create a secret with the Coroot password and optional webhook secret:
 
 ```bash

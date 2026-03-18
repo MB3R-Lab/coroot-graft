@@ -120,6 +120,43 @@ This is useful for release gating, topology reviews, dependency risk assessment,
 - `sync`: run one-shot Coroot -> Bering -> Sheaft sync for one or all configured projects
 - `install-dashboard`: create or update a managed Coroot dashboard backed by exported metrics
 
+## Installation
+
+### Release packages
+
+Download the packaged release artifacts from GitHub Releases:
+
+- `coroot-graft_<version>_linux_amd64.tar.gz`
+- `coroot-graft_<version>_linux_arm64.tar.gz`
+- `coroot-graft_<version>_darwin_amd64.tar.gz`
+- `coroot-graft_<version>_darwin_arm64.tar.gz`
+- `coroot-graft_<version>_windows_amd64.zip`
+
+Each release also publishes:
+
+- `coroot-graft_<version>_checksums.txt`
+- `coroot-graft-<version>.tgz` Helm chart package
+- `compatibility-manifest.json`
+- `toolchain.env`
+
+### OCI image
+
+The release workflow publishes a runtime image that already contains:
+
+- `coroot-graft`
+- `bering`
+- `sheaft`
+
+Image repository:
+
+- `ghcr.io/mb3r-lab/coroot-graft`
+
+### OCI Helm chart
+
+The Helm chart is also published to:
+
+- `oci://ghcr.io/mb3r-lab/charts/coroot-graft`
+
 ## Config
 
 See `configs/graft.example.yaml` for the expected shape.
@@ -175,6 +212,11 @@ Implementation notes and MVP boundaries are documented in `docs/architecture.md`
 
 - Production install guide: `docs/install.md`
 - Pinned compatibility baseline: `docs/compatibility.md`
+- Release assets and package matrix: `docs/release-assets.md`
 - Roadmap and issue index: `docs/roadmap.md`
 - Integration policy: `docs/integration-policy.md`
 - Machine-readable version pins: `compatibility-manifest.json`
+
+## License
+
+MIT, see [LICENSE](LICENSE).

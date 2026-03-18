@@ -15,16 +15,20 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
+      - name: Install Helm
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DESIRED_VERSION="v3.19.1"
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
       - name: Load pinned toolchain versions
         run: cat versions/toolchain.env >> "$GITHUB_ENV"

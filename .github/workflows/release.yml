@@ -1,0 +1,167 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Helm
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DESIRED_VERSION="v3.19.1"
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Install GoReleaser
+        run: go install github.com/goreleaser/goreleaser/v2@v2.14.3
+
+      - name: Install Syft
+        run: go install github.com/anchore/syft/cmd/syft@v1.40.0
+
+      - name: Add Go bin to PATH
+        shell: bash
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Load pinned toolchain versions
+        run: cat versions/toolchain.env >> "$GITHUB_ENV"
+
+      - name: Run full test suite
+        run: go test -count=1 ./...
+
+      - name: Build release archives
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          export RELEASE_VERSION="${RELEASE_VERSION#v}"
+          goreleaser release --clean --skip=publish
+
+      - name: Login to GHCR
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          echo "${GHCR_TOKEN}" | helm registry login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Publish OCI image
+        shell: bash
+        env:
+          VERSION_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION_TAG#v}"
+          OWNER_LC="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE_REPOSITORY="ghcr.io/${OWNER_LC}/coroot-graft"
+          BUILD_DATE="$(git show -s --format=%cI HEAD)"
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --file build/Dockerfile \
+            --tag "${IMAGE_REPOSITORY}:${VERSION_TAG}" \
+            --tag "${IMAGE_REPOSITORY}:${VERSION}" \
+            --build-arg VERSION="${VERSION}" \
+            --build-arg COMMIT="${GITHUB_SHA}" \
+            --build-arg BUILD_DATE="${BUILD_DATE}" \
+            --build-arg BERING_REPOSITORY="${BERING_REPOSITORY}" \
+            --build-arg BERING_REF="${BERING_REF}" \
+            --build-arg SHEAFT_REPOSITORY="${SHEAFT_REPOSITORY}" \
+            --build-arg SHEAFT_REF="${SHEAFT_REF}" \
+            --push \
+            .
+
+      - name: Package and publish OCI chart
+        shell: bash
+        env:
+          VERSION_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION_TAG#v}"
+          OWNER_LC="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          mkdir -p dist/charts
+          helm package charts/coroot-graft --destination dist/charts
+          helm push "dist/charts/coroot-graft-${VERSION}.tgz" "oci://ghcr.io/${OWNER_LC}/charts"
+
+      - name: Write release notes
+        shell: bash
+        env:
+          VERSION_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION_TAG#v}"
+          OWNER_LC="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          cat > dist/release-notes.md <<EOF
+          coroot-graft ${VERSION_TAG}
+
+          Public release packages:
+
+          - cross-platform CLI archives
+          - SHA256 checksums
+          - packaged Helm chart
+          - compatibility-manifest.json
+          - toolchain.env
+
+          OCI image:
+          - ghcr.io/${OWNER_LC}/coroot-graft:${VERSION_TAG}
+
+          OCI Helm chart:
+          - oci://ghcr.io/${OWNER_LC}/charts/coroot-graft
+          - chart version ${VERSION}
+          EOF
+
+      - name: Create or update GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          TITLE="coroot-graft ${TAG}"
+          mapfile -t files < <(
+            {
+              find dist -maxdepth 1 -type f \( \
+                -name 'coroot-graft_*.tar.gz' -o \
+                -name 'coroot-graft_*.zip' -o \
+                -name 'coroot-graft_*.sbom.json' -o \
+                -name 'coroot-graft_*_checksums.txt' -o \
+                -name 'coroot-graft_*_source.tar.gz' \
+              \)
+              find dist/charts -maxdepth 1 -type f -name 'coroot-graft-*.tgz'
+            } | sort
+          )
+          files+=("compatibility-manifest.json")
+          files+=("versions/toolchain.env")
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release upload "${TAG}" "${files[@]}" --clobber
+            gh release edit "${TAG}" --title "${TITLE}" --notes-file dist/release-notes.md
+          else
+            gh release create "${TAG}" "${files[@]}" --title "${TITLE}" --notes-file dist/release-notes.md
+          fi

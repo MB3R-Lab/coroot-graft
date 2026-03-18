@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## v0.1.1 - 2026-03-18
+
+Patch release that turns the first public MVP into a fully packaged public release.
+
+Included in this release:
+
+- cross-platform CLI archives for Linux, macOS, and Windows
+- release checksum publication
+- multi-arch OCI image publication to `ghcr.io/mb3r-lab/coroot-graft`
+- OCI Helm chart publication to `oci://ghcr.io/mb3r-lab/charts/coroot-graft`
+- release automation with GoReleaser and tag-triggered GitHub Actions
+- README and install docs updated with release package locations
+- repository About summary populated
+
+Stable within `v0.1.1`:
+
+- the same Coroot adapter, topology normalization, and Bering -> Sheaft orchestration shipped in `v0.1.0`
+- pinned compatibility baseline for Coroot, Bering, and Sheaft
+- managed Coroot dashboard publication backed by `coroot_graft_*` metrics
+
+Known limitations remain unchanged from `v0.1.0`:
+
+- published dashboard values represent recomputed resilience posture, not a direct live health score
+- topology membership is primarily driven by Coroot application inventory in the current MVP
+- runtime degradation and posture are not yet separated into distinct published signal families
+
 ## v0.1.0 - 2026-03-18
 
 First public `coroot-graft` MVP release.
