@@ -28,7 +28,7 @@ include versions/toolchain.env
 IMAGE ?= ghcr.io/mb3r-lab/coroot-graft:dev
 HELM_BIN ?= helm
 DIST_DIR ?= dist
-APP_VERSION ?= 0.1.1
+APP_VERSION ?= 0.1.2
 ifeq ($(OS),Windows_NT)
 GIT_COMMIT ?= $(strip $(shell powershell -NoProfile -Command "$$commit = git rev-parse HEAD 2>$$null; if ($$LASTEXITCODE -eq 0 -and $$commit) { $$commit } else { 'unknown' }"))
 BUILD_DATE ?= $(strip $(shell powershell -NoProfile -Command "(Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')"))

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## v0.1.1 - 2026-03-18
+## v0.1.2 - 2026-03-18
 
 Patch release that turns the first public MVP into a fully packaged public release.
 
@@ -16,7 +16,7 @@ Included in this release:
 - README and install docs updated with release package locations
 - repository About summary populated
 
-Stable within `v0.1.1`:
+Stable within `v0.1.2`:
 
 - the same Coroot adapter, topology normalization, and Bering -> Sheaft orchestration shipped in `v0.1.0`
 - pinned compatibility baseline for Coroot, Bering, and Sheaft

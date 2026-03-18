@@ -2,7 +2,7 @@ FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS graft-build
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG TARGETVARIANT=""
-ARG VERSION=0.1.1
+ARG VERSION=0.1.2
 ARG COMMIT=unknown
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 WORKDIR /src
@@ -54,7 +54,7 @@ RUN set -eu; \
     go build -trimpath -ldflags="-s -w" -o /out/sheaft ./cmd/sheaft
 
 FROM alpine:3.20
-ARG VERSION=0.1.1
+ARG VERSION=0.1.2
 ARG COMMIT=unknown
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 LABEL org.opencontainers.image.title="coroot-graft" \
