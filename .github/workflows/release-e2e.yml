@@ -1,0 +1,193 @@
+name: Release E2E
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-coroot-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Load pinned toolchain versions
+        run: cat versions/toolchain.env >> "$GITHUB_ENV"
+
+      - name: Prepare upstream toolchains
+        run: |
+          mkdir -p .cache/upstream
+          git clone "${BERING_REPOSITORY}" .cache/upstream/Bering
+          git -C .cache/upstream/Bering checkout "${BERING_REF}"
+          git clone "${SHEAFT_REPOSITORY}" .cache/upstream/Sheaft
+          git -C .cache/upstream/Sheaft checkout "${SHEAFT_REF}"
+
+      - name: Start Coroot stack
+        env:
+          AUTH_BOOTSTRAP_ADMIN_PASSWORD: secret
+        run: docker compose -f deploy/docker/coroot-compose.yaml up -d
+
+      - name: Start deterministic demo topology
+        run: docker compose -f deploy/docker/demo-compose.yaml up -d
+
+      - name: Wait for Coroot HTTP endpoint
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Coroot did not become ready in time" >&2
+          exit 1
+
+      - name: Authenticate and discover project id
+        run: |
+          mkdir -p .cache/coroot
+          cat > .cache/coroot/login.json <<'EOF'
+          {"email":"admin","password":"secret"}
+          EOF
+          curl -fsS -c .cache/coroot/cookies.txt -X POST http://127.0.0.1:8080/api/login \
+            -H 'Content-Type: application/json' \
+            --data-binary @.cache/coroot/login.json > /dev/null
+          curl -fsS -b .cache/coroot/cookies.txt http://127.0.0.1:8080/api/user > .cache/coroot/user.json
+          python - <<'PY'
+          import json
+          data = json.load(open(".cache/coroot/user.json", "r", encoding="utf-8"))
+          projects = data.get("projects") or []
+          if not projects:
+              raise SystemExit("no Coroot projects available")
+          print(projects[0]["id"])
+          PY
+          python - <<'PY' > .cache/coroot/project-id.txt
+          import json
+          data = json.load(open(".cache/coroot/user.json", "r", encoding="utf-8"))
+          print((data.get("projects") or [])[0]["id"])
+          PY
+
+      - name: Wait for application inventory
+        run: |
+          PROJECT_ID="$(cat .cache/coroot/project-id.txt)"
+          FROM="$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)"
+          TO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          for i in $(seq 1 60); do
+            curl -fsS -b .cache/coroot/cookies.txt \
+              "http://127.0.0.1:8080/api/project/${PROJECT_ID}/overview/map?from=${FROM}&to=${TO}" \
+              > .cache/coroot/overview.json
+            if python - <<'PY'
+          import json, sys
+          data = json.load(open(".cache/coroot/overview.json", "r", encoding="utf-8"))
+          apps = (((data.get("context") or {}).get("search") or {}).get("applications") or [])
+          ids = [item.get("id", "") for item in apps]
+          wanted = ("frontend", "checkout")
+          ok = all(any(token in app_id for app_id in ids) for token in wanted)
+          sys.exit(0 if ok else 1)
+          PY
+            then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Coroot did not discover the demo topology in time" >&2
+          exit 1
+
+      - name: Run full test suite
+        run: go test -count=1 ./...
+
+      - name: Build coroot-graft
+        run: go build ./cmd/coroot-graft
+
+      - name: Lint Helm chart
+        run: helm lint charts/coroot-graft
+
+      - name: Write live e2e config
+        run: |
+          PROJECT_ID="$(cat .cache/coroot/project-id.txt)"
+          cat > .cache/coroot/graft-release-e2e.yaml <<EOF
+          listen_address: ":8095"
+          storage_dir: ".coroot-graft-release"
+          sync_timeout: 10m
+
+          coroot:
+            base_url: "http://127.0.0.1:8080"
+            email: "admin"
+            password: "secret"
+            http_timeout: 30s
+            time_window: 1h
+
+          toolchain:
+            bering:
+              command: ["go", "run", "./cmd/bering"]
+              working_dir: "../upstream/Bering"
+            sheaft:
+              command: ["go", "run", "./cmd/sheaft"]
+              working_dir: "../upstream/Sheaft"
+
+          projects:
+            - name: "live-default"
+              coroot_project: "${PROJECT_ID}"
+              interval: 0s
+              endpoint_mode: "service"
+              include_external: true
+              exclude_categories:
+                - "monitoring"
+              analysis: "../../configs/sheaft.analysis.example.yaml"
+              webhook_secret: "release-secret"
+              dashboard:
+                install: true
+                name: "Coroot Graft Release E2E"
+                description: "Managed resilience dashboard published by coroot-graft in release E2E"
+          EOF
+
+      - name: Run live Coroot sync
+        run: go run ./cmd/coroot-graft sync -config .cache/coroot/graft-release-e2e.yaml -project live-default
+
+      - name: Install dashboard into live Coroot
+        run: go run ./cmd/coroot-graft install-dashboard -config .cache/coroot/graft-release-e2e.yaml -project live-default
+
+      - name: Verify runtime server export
+        run: |
+          go run ./cmd/coroot-graft serve -config .cache/coroot/graft-release-e2e.yaml > .cache/coroot/graft-serve.log 2>&1 &
+          GRAFT_PID=$!
+          trap 'kill ${GRAFT_PID} || true' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8095/metrics > .cache/coroot/metrics.txt; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8095/api/v1/projects > .cache/coroot/projects.json
+          grep -q 'coroot_graft_summary_risk_score' .cache/coroot/metrics.txt
+          grep -q '"project":"live-default"' .cache/coroot/projects.json
+
+      - name: Dump logs and docker status
+        if: always()
+        run: |
+          docker compose -f deploy/docker/coroot-compose.yaml ps || true
+          docker compose -f deploy/docker/demo-compose.yaml ps || true
+          docker compose -f deploy/docker/coroot-compose.yaml logs coroot cluster-agent node-agent prometheus clickhouse || true
+          docker compose -f deploy/docker/demo-compose.yaml logs frontend checkout loadgen || true
+          test -f .cache/coroot/graft-serve.log && cat .cache/coroot/graft-serve.log || true
+
+      - name: Stop demo topology
+        if: always()
+        run: docker compose -f deploy/docker/demo-compose.yaml down -v
+
+      - name: Stop Coroot stack
+        if: always()
+        run: docker compose -f deploy/docker/coroot-compose.yaml down -v

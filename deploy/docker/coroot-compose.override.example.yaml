@@ -1,0 +1,4 @@
+services:
+  coroot:
+    environment:
+      - AUTH_BOOTSTRAP_ADMIN_PASSWORD=secret

@@ -1,0 +1,43 @@
+listen_address: ":8095"
+storage_dir: ".coroot-graft"
+sync_timeout: 10m
+
+coroot:
+  base_url: "http://127.0.0.1:8080"
+  email: "admin"
+  password: "change-me"
+  http_timeout: 30s
+  time_window: 1h
+
+toolchain:
+  bering:
+    command: ["bering"]
+  sheaft:
+    command: ["sheaft"]
+
+projects:
+  - name: "production"
+    coroot_project: "production"
+    interval: 5m
+    endpoint_mode: "service"
+    include_apps:
+      - "frontend*"
+      - "checkout*"
+    include_external: true
+    exclude_categories:
+      - "monitoring"
+    analysis: "configs/sheaft.analysis.example.yaml"
+    webhook_secret: "change-me"
+    dashboard:
+      install: true
+      name: "Coroot Graft"
+      description: "Managed resilience dashboard published by coroot-graft"
+    edge_overrides:
+      - from: "cluster-a:default:Deployment:frontend"
+        to: "cluster-a:default:Deployment:checkout"
+        kind: "sync"
+        blocking: true
+      - from: "cluster-a:default:Deployment:checkout"
+        to: "cluster-a:default:Deployment:payment-events"
+        kind: "async"
+        blocking: false

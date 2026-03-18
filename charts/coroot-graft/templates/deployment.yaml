@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "coroot-graft.fullname" . }}
+  labels:
+    {{- include "coroot-graft.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "coroot-graft.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "coroot-graft.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "coroot-graft.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: coroot-graft
+          image: {{ include "coroot-graft.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - serve
+            - -config
+            - {{ printf "%s/%s" .Values.config.mountPath .Values.config.graftFileName | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          env:
+            {{- range .Values.env }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+          {{- if or .Values.envFrom .Values.secrets.existingSecret .Values.secrets.create }}
+          envFrom:
+            {{- if or .Values.secrets.existingSecret .Values.secrets.create }}
+            - secretRef:
+                name: {{ include "coroot-graft.secretName" . }}
+            {{- end }}
+            {{- with .Values.envFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          volumeMounts:
+            - name: config
+              mountPath: {{ .Values.config.mountPath | quote }}
+              readOnly: true
+            - name: data
+              mountPath: {{ .Values.storage.mountPath | quote }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "coroot-graft.configMapName" . }}
+        - name: data
+{{ include "coroot-graft.volumeSource" (dict "volume" .Values.storage) | indent 10 }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

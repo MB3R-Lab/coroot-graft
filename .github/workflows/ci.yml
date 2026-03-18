@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Load pinned toolchain versions
+        run: cat versions/toolchain.env >> "$GITHUB_ENV"
+
+      - name: Prepare upstream toolchains for smoke tests
+        run: |
+          mkdir -p .cache/upstream
+          git clone "${BERING_REPOSITORY}" .cache/upstream/Bering
+          git -C .cache/upstream/Bering checkout "${BERING_REF}"
+          git clone "${SHEAFT_REPOSITORY}" .cache/upstream/Sheaft
+          git -C .cache/upstream/Sheaft checkout "${SHEAFT_REF}"
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Run full test suite
+        run: go test -count=1 ./...
+
+      - name: Build coroot-graft
+        run: go build ./cmd/coroot-graft
+
+      - name: Lint Helm chart
+        run: helm lint charts/coroot-graft

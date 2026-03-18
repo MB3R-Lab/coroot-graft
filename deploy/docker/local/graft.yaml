@@ -1,0 +1,39 @@
+listen_address: ":8095"
+storage_dir: "/var/lib/coroot-graft"
+sync_timeout: 10m
+
+coroot:
+  base_url: "http://coroot:8080"
+  email: "admin"
+  password: "${COROOT_GRAFT_COROOT_PASSWORD}"
+  http_timeout: 30s
+  time_window: 1h
+
+toolchain:
+  bering:
+    command: ["/usr/local/bin/bering"]
+  sheaft:
+    command: ["/usr/local/bin/sheaft"]
+
+projects:
+  - name: "live-default"
+    coroot_project: "default"
+    interval: 30s
+    endpoint_mode: "service"
+    include_apps:
+      - "coroot-graft-demo-frontend*"
+      - "coroot-graft-demo-checkout*"
+    include_external: false
+    exclude_categories:
+      - "monitoring"
+    analysis: "/etc/coroot-graft/analysis.default.yaml"
+    webhook_secret: "${COROOT_GRAFT_WEBHOOK_SECRET}"
+    edge_overrides:
+      - from: "pbe6k51m:_:Unknown:coroot-graft-demo-frontend-1"
+        to: "pbe6k51m:_:Unknown:coroot-graft-demo-checkout-1"
+        kind: "sync"
+        blocking: true
+    dashboard:
+      install: true
+      name: "Coroot Graft Live"
+      description: "Managed resilience dashboard published by coroot-graft against local Coroot"

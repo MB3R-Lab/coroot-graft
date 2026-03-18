@@ -1,0 +1,15 @@
+{{- if not .Values.config.existingConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "coroot-graft.configMapName" . }}
+  labels:
+    {{- include "coroot-graft.labels" . | nindent 4 }}
+data:
+  {{ .Values.config.graftFileName }}: |
+{{ .Values.config.graft | indent 4 }}
+  {{- range $name, $content := .Values.config.extraFiles }}
+  {{ $name }}: |
+{{ $content | indent 4 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,111 @@
+image:
+  repository: ghcr.io/mb3r-lab/coroot-graft
+  tag: v0.1.0
+  digest: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 8095
+
+config:
+  existingConfigMap: ""
+  mountPath: /etc/coroot-graft
+  graftFileName: graft.yaml
+  graft: |
+    listen_address: ":8095"
+    storage_dir: "/var/lib/coroot-graft"
+    sync_timeout: 10m
+
+    coroot:
+      base_url: "http://coroot:8080"
+      email: "admin"
+      password: "${COROOT_GRAFT_COROOT_PASSWORD}"
+      http_timeout: 30s
+      time_window: 1h
+
+    toolchain:
+      bering:
+        command: ["/usr/local/bin/bering"]
+      sheaft:
+        command: ["/usr/local/bin/sheaft"]
+
+    projects:
+      - name: "production"
+        coroot_project: "production"
+        interval: 5m
+        endpoint_mode: "service"
+        include_external: true
+        exclude_categories:
+          - "monitoring"
+        analysis: "/etc/coroot-graft/analysis.default.yaml"
+        webhook_secret: "${COROOT_GRAFT_WEBHOOK_SECRET}"
+        dashboard:
+          install: true
+          name: "Coroot Graft"
+          description: "Managed resilience dashboard published by coroot-graft"
+  extraFiles:
+    analysis.default.yaml: |
+      schema_version: "1.0"
+      seed: 42
+      trials: 12000
+      sampling_mode: independent_replica
+      failure_probability: 0.05
+
+      profiles:
+        - name: steady-state
+          sampling_mode: independent_replica
+          failure_probability: 0.03
+        - name: service-fault
+          sampling_mode: independent_service
+          failure_probability: 0.08
+        - name: fixed-blast-radius
+          sampling_mode: fixed_k_service_set
+          fixed_k_failures: 1
+
+      gate:
+        mode: warn
+        default_action: warn
+        evaluation_rule: all_profiles
+        global_threshold: 0.985
+        aggregate_threshold: 0.97
+        cross_profile_aggregate_threshold: 0.965
+
+secrets:
+  existingSecret: ""
+  create: false
+  nameOverride: ""
+  stringData:
+    COROOT_GRAFT_COROOT_PASSWORD: ""
+    COROOT_GRAFT_WEBHOOK_SECRET: ""
+
+storage:
+  type: emptyDir
+  existingClaim: ""
+  hostPath: ""
+  mountPath: /var/lib/coroot-graft
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations:
+  coroot.com/scrape-metrics: "true"
+  coroot.com/metrics-port: "8095"
+  coroot.com/metrics-path: "/metrics"
+
+podLabels: {}
+resources: {}
+podSecurityContext: {}
+securityContext: {}
+imagePullSecrets: []
+nodeSelector: {}
+tolerations: []
+affinity: {}
+env: []
+envFrom: []
+extraVolumes: []
+extraVolumeMounts: []

@@ -1,0 +1,16 @@
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "coroot-graft.fullname" . }}
+  labels:
+    {{- include "coroot-graft.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "coroot-graft.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+{{- end }}

@@ -1,0 +1,8 @@
+.cache/
+.tmp/
+.coroot-graft/
+.coroot-graft*/
+bin/
+dist/
+coverage.out
+*.exe
