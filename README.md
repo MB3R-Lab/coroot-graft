@@ -198,11 +198,25 @@ metadata:
 
 ### Webhook trigger
 
-Configure a Coroot Webhook integration to call:
+`coroot-graft` is not a hosted service. The Coroot Webhook integration must call
+the `coroot-graft` service deployed in your own cluster. The webhook must send
+`POST`.
+
+With the default chart release name and project config, use this URL when Coroot
+can resolve services in the same namespace:
 
 ```text
-http://coroot-graft:8095/webhooks/coroot/<project>?secret=<secret>
+http://coroot-graft:8095/webhooks/coroot/production?secret=<COROOT_GRAFT_WEBHOOK_SECRET>
 ```
+
+If Coroot runs in another namespace, use the Kubernetes service DNS name:
+
+```text
+http://coroot-graft.coroot-graft.svc.cluster.local:8095/webhooks/coroot/production?secret=<COROOT_GRAFT_WEBHOOK_SECRET>
+```
+
+The path segment after `/webhooks/coroot/` is `projects[].name` from the
+`coroot-graft` config. It can differ from `projects[].coroot_project`.
 
 Coroot documents `{{ json . }}` as its built-in JSON template function. Use it in
 the Coroot Webhook integration JSON template field when the integration asks for

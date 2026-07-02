@@ -55,8 +55,19 @@ What the chart does:
 - injects secrets through environment variables
 - runs `coroot-graft serve -config /etc/coroot-graft/graft.yaml`
 - persists artifacts under `/var/lib/coroot-graft`
-- exposes `/metrics`, `/healthz`, `/readyz`, and webhook endpoints
+- exposes `/metrics`, `/healthz`, `/readyz`, and `/webhooks/coroot/{project}`
 - annotates the pod so Coroot cluster-agent can scrape custom metrics
+
+`coroot-graft` is not a hosted service. For the default release name, namespace,
+and example project config, the Coroot Webhook integration URL points to the
+service installed in your own cluster:
+
+```text
+http://coroot-graft.coroot-graft.svc.cluster.local:8095/webhooks/coroot/production?secret=<COROOT_GRAFT_WEBHOOK_SECRET>
+```
+
+The webhook must send `POST`. The `production` path segment is
+`projects[].name` from `graft.yaml`, not necessarily the Coroot project ID.
 
 ## Local Coroot Stack
 
