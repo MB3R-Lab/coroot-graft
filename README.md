@@ -132,17 +132,20 @@ This is useful for release gating, topology reviews, dependency risk assessment,
 
 ### Release packages
 
-Download the packaged release artifacts from GitHub Releases:
+Download the packaged release artifacts from [GitHub Releases](https://github.com/MB3R-Lab/coroot-graft/releases):
 
 - `coroot-graft_<version>_linux_amd64.tar.gz`
 - `coroot-graft_<version>_linux_arm64.tar.gz`
 - `coroot-graft_<version>_darwin_amd64.tar.gz`
 - `coroot-graft_<version>_darwin_arm64.tar.gz`
 - `coroot-graft_<version>_windows_amd64.zip`
+- `coroot-graft_<version>_source.tar.gz`
 
 Each release also publishes:
 
 - `coroot-graft_<version>_checksums.txt`
+- `coroot-graft_<version>_<os>_<arch>.tar.gz.sbom.json` for Linux and macOS archives
+- `coroot-graft_<version>_windows_amd64.zip.sbom.json`
 - `coroot-graft-<version>.tgz` Helm chart package
 - `compatibility-manifest.json`
 - `toolchain.env`
@@ -198,29 +201,28 @@ metadata:
 
 ### Webhook trigger
 
-`coroot-graft` is not a hosted service. The Coroot Webhook integration must call
-the `coroot-graft` service deployed in your own cluster. The webhook must send
-`POST`.
+`coroot-graft` is not hosted by MB3R. The Coroot Webhook integration must send
+`POST` requests to the `coroot-graft` service deployed in your own cluster.
 
-With the default chart release name and project config, use this URL when Coroot
-can resolve services in the same namespace:
-
-```text
-http://coroot-graft:8095/webhooks/coroot/production?secret=<COROOT_GRAFT_WEBHOOK_SECRET>
-```
-
-If Coroot runs in another namespace, use the Kubernetes service DNS name:
+For the default Helm release name, namespace, and example project config, the
+in-cluster URL is:
 
 ```text
-http://coroot-graft.coroot-graft.svc.cluster.local:8095/webhooks/coroot/production?secret=<COROOT_GRAFT_WEBHOOK_SECRET>
+http://coroot-graft.coroot-graft.svc.cluster.local:8095/webhooks/coroot/production?secret=replace-me
 ```
 
-The path segment after `/webhooks/coroot/` is `projects[].name` from the
-`coroot-graft` config. It can differ from `projects[].coroot_project`.
+URL parts:
+
+| Part | Default | Source |
+| --- | --- | --- |
+| Service DNS name | `coroot-graft.coroot-graft.svc.cluster.local` | Helm release `coroot-graft` in namespace `coroot-graft` |
+| Path project name | `production` | `projects[].name` in `graft.yaml` |
+| Secret query value | `replace-me` | value of `projects[].webhook_secret` after environment expansion |
+
+The path project name can differ from `projects[].coroot_project`.
 
 Coroot documents `{{ json . }}` as its built-in JSON template function. Use it in
-the Coroot Webhook integration JSON template field when the integration asks for
-a request body:
+the Coroot Webhook integration JSON template field:
 
 ```gotemplate
 {{ json . }}
@@ -229,18 +231,12 @@ a request body:
 `coroot-graft` treats the webhook as a trigger. It does not currently parse the
 request body; the project and secret are taken from the URL.
 
-## Upstream Notes
-
-Contract notes used for this implementation are summarized in `docs/upstream-summary.md`.
-
-Implementation notes and MVP boundaries are documented in `docs/architecture.md`.
-
-## Install And Compatibility
+## Documentation
 
 - Production install guide: `docs/install.md`
 - Pinned compatibility baseline: `docs/compatibility.md`
+- Architecture and MVP boundaries: `docs/architecture.md`
 - Release assets and package matrix: `docs/release-assets.md`
-- Roadmap and issue index: `docs/roadmap.md`
 - Integration policy: `docs/integration-policy.md`
 - Machine-readable version pins: `compatibility-manifest.json`
 

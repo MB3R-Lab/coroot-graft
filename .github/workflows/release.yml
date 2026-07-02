@@ -124,13 +124,16 @@ jobs:
           Public release packages:
 
           - cross-platform CLI archives
+          - source archive
           - SHA256 checksums
+          - archive SBOMs
           - packaged Helm chart
           - compatibility-manifest.json
           - toolchain.env
 
           OCI image:
           - ghcr.io/${OWNER_LC}/coroot-graft:${VERSION_TAG}
+          - ghcr.io/${OWNER_LC}/coroot-graft:${VERSION}
 
           OCI Helm chart:
           - oci://ghcr.io/${OWNER_LC}/charts/coroot-graft

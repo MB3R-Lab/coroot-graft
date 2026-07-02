@@ -18,7 +18,7 @@
 3. It converts the Coroot snapshot into explicit Bering `topology_api` input.
 4. It runs `bering discover`.
 5. It runs `sheaft run` on the produced Bering snapshot artifact.
-6. It stores run artifacts under `.coroot-graft/projects/<project>/`.
+6. It stores run artifacts under `.coroot-graft/projects/{project}/`.
 7. It exports latest results as Prometheus metrics and optionally installs a managed Coroot dashboard.
 
 ## Snapshot Layers

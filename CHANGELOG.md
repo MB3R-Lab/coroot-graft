@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Aligned README, install, release, and integration documentation with the
+  published v0.2.0 package surface and MB3R v1 compatibility baseline.
+- Clarified that Coroot webhooks call the user's deployed `coroot-graft`
+  service; MB3R does not host a public `coroot-graft` webhook service.
+- Removed internal roadmap/audit notes from `docs/`; GitHub Issues remain the
+  source of truth for backlog tracking.
+
 ## v0.2.0 - 2026-07-02
 
 Compatibility release for the MB3R v1 major line.

@@ -23,11 +23,13 @@ Release checklist:
    - `goreleaser release --clean --snapshot --skip=publish`
 7. Push the release commit and `vX.Y.Z` tag. The tag workflow is expected to publish:
    - GitHub Release archives
+   - source archive
    - release checksums
+   - archive SBOMs
    - Helm chart package
    - multi-arch OCI image
    - OCI Helm chart
-8. Publish the release only after the `Release E2E` GitHub workflow passes against the pinned local Coroot stack.
+8. After the tag workflow creates or updates the GitHub Release, verify that the `Release E2E` GitHub workflow passes against the pinned local Coroot stack. Treat the release as validated only after that workflow is green.
 
 The release workflow is expected to validate:
 
