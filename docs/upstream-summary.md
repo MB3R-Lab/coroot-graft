@@ -92,7 +92,7 @@
   - `coroot.com/metrics-port`
   - `coroot.com/metrics-path`
   - `coroot.com/metrics-scheme`
-- Webhook integration документированно умеет отправлять JSON через template `{{ json . }}`.
+- Webhook integration документированно поддерживает Go templates и built-in `json` function: `{{ json . }}`. Для `coroot-graft` это trigger context, а не parsed contract.
 - Alerting в Coroot является event source: alerts/deployments/incidents могут служить trigger signal для внешнего recalculation pipeline.
 
 Неформально подтверждённые, но полезные контракты из исходников:

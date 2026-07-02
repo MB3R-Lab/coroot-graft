@@ -204,11 +204,16 @@ Configure a Coroot Webhook integration to call:
 http://coroot-graft:8095/webhooks/coroot/<project>?secret=<secret>
 ```
 
-The body can be the documented Coroot JSON payload template:
+Coroot documents `{{ json . }}` as its built-in JSON template function. Use it in
+the Coroot Webhook integration JSON template field when the integration asks for
+a request body:
 
 ```gotemplate
 {{ json . }}
 ```
+
+`coroot-graft` treats the webhook as a trigger. It does not currently parse the
+request body; the project and secret are taken from the URL.
 
 ## Upstream Notes
 
