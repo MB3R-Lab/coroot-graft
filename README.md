@@ -1,19 +1,19 @@
 # coroot-graft
 
-[![release](https://img.shields.io/github/v/release/MB3R-Lab/coroot-graft?label=release)](https://github.com/MB3R-Lab/coroot-graft/releases)
+[![release](https://img.shields.io/badge/release-v0.2.0-blue)](https://github.com/MB3R-Lab/coroot-graft/releases/tag/v0.2.0)
 [![checks](https://img.shields.io/github/actions/workflow/status/MB3R-Lab/coroot-graft/ci.yml?branch=main&label=checks)](https://github.com/MB3R-Lab/coroot-graft/actions/workflows/ci.yml)
 [![mb3r toolchain](https://img.shields.io/badge/mb3r%20toolchain-v1-blue)](docs/compatibility.md)
 
 ## Related MB3R repositories
 
-`coroot-graft` wraps [Bering](https://github.com/MB3R-Lab/Bering) and [Sheaft](https://github.com/MB3R-Lab/Sheaft) as an existing toolchain.
+`coroot-graft` wraps Bering and Sheaft as an existing toolchain.
 
 [Bering](https://github.com/MB3R-Lab/Bering) owns discovery and artifact publishing. [Sheaft](https://github.com/MB3R-Lab/Sheaft) owns downstream resilience analysis and CI/CD gating.
 
 It does not reimplement discovery and it does not reimplement the resilience evaluator:
 
-- [Bering](https://github.com/MB3R-Lab/Bering) stays responsible for model discovery / normalization.
-- [Sheaft](https://github.com/MB3R-Lab/Sheaft) stays responsible for downstream resilience analysis / gate.
+- Bering stays responsible for model discovery / normalization.
+- Sheaft stays responsible for downstream resilience analysis / gate.
 - `coroot-graft` owns Coroot-specific extraction, topology shaping, orchestration, artifact lifecycle, and publishing results back into Coroot.
 
 ## Architecture
