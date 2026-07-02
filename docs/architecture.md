@@ -53,7 +53,7 @@ This is the format handed to `bering discover`.
 
 ### 3. Bering snapshot artifact
 
-This is upstream `Bering`'s emitted `io.mb3r.bering.snapshot@1.0.0` artifact.
+This is upstream `Bering`'s emitted `io.mb3r.bering.snapshot@1.3.0` artifact.
 
 It is the canonical MB3R discovery artifact later consumed by `Sheaft`.
 

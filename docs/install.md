@@ -19,14 +19,14 @@ Published package entrypoints:
 Example image pull:
 
 ```bash
-docker pull ghcr.io/mb3r-lab/coroot-graft:v0.1.2
+docker pull ghcr.io/mb3r-lab/coroot-graft:v0.2.0
 ```
 
 Example OCI chart install:
 
 ```bash
 helm upgrade --install coroot-graft oci://ghcr.io/mb3r-lab/charts/coroot-graft \
-  --version 0.1.2 \
+  --version 0.2.0 \
   --namespace coroot-graft \
   --create-namespace \
   --set secrets.existingSecret=coroot-graft-secrets

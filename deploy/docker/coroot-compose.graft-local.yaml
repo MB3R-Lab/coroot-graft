@@ -9,10 +9,10 @@ services:
       dockerfile: build/Dockerfile
       args:
         BERING_REPOSITORY: ${BERING_REPOSITORY:-https://github.com/MB3R-Lab/Bering}
-        BERING_REF: ${BERING_REF:-812b69982293a02b1be46ee2b2161beced2f658a}
+        BERING_REF: ${BERING_REF:-d858f09a8cca8edf302646a54b28412d158c0ec2}
         SHEAFT_REPOSITORY: ${SHEAFT_REPOSITORY:-https://github.com/MB3R-Lab/Sheaft}
-        SHEAFT_REF: ${SHEAFT_REF:-7a37c5908a721157f9178d6173395f1cbb29d493}
-        VERSION: ${APP_VERSION:-0.1.2}
+        SHEAFT_REF: ${SHEAFT_REF:-fa40ee250b9dbf7f106ea7a0c49e35fdd5105172}
+        VERSION: ${APP_VERSION:-0.2.0}
     image: coroot-graft-local:dev
     restart: always
     command: ["serve", "-config", "/etc/coroot-graft/graft.yaml"]

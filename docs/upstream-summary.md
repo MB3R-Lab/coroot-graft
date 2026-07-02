@@ -9,10 +9,10 @@
 
 Ключевой контракт:
 
-- `Bering v0.1.0` является discovery/publishing слоем.
+- `Bering v1.0.0` является discovery/publishing слоем.
 - Стабильные выходные артефакты:
-  - `io.mb3r.bering.model@1.0.0`
-  - `io.mb3r.bering.snapshot@1.0.0`
+  - `io.mb3r.bering.model@1.3.0`
+  - `io.mb3r.bering.snapshot@1.3.0`
 - Открытый batch CLI:
   - `bering discover --input ... --out ... [--snapshot-out ...] [--overlay ...] [--discovered-at ...]`
   - `bering validate --input ...`
@@ -40,10 +40,10 @@
 
 Ключевой контракт:
 
-- `Sheaft v0.1.1` является downstream resilience posture engine и gate.
+- `Sheaft v1.0.0` является downstream resilience posture engine и gate.
 - Sheaft принимает только whitelist upstream-контрактов:
-  - `io.mb3r.bering.model@1.0.0`
-  - `io.mb3r.bering.snapshot@1.0.0`
+  - `io.mb3r.bering.model@1.3.0`
+  - `io.mb3r.bering.snapshot@1.3.0`
 - Открытый batch CLI:
   - `sheaft simulate`
   - `sheaft gate`

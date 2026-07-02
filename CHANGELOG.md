@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## v0.2.0 - 2026-07-02
+
+Compatibility release for the MB3R v1 major line.
+
+Included in this release:
+
+- pinned upstream Bering to `v1.0.0`
+- pinned upstream Sheaft to `v1.0.0`
+- updated the Bering model/snapshot contract baseline to `1.3.0`
+- updated local Docker, Helm, CI, and release build defaults to embed the v1 toolchain
+
 ## v0.1.2 - 2026-03-18
 
 Patch release that turns the first public MVP into a fully packaged public release.

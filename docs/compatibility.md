@@ -9,8 +9,11 @@ Current tested baseline:
 - Coroot cluster agent image: `ghcr.io/coroot/coroot-cluster-agent@sha256:ebeed930e00ceb7c3d577a8f371c541cc409457830c5e67b237dce350c7c4250` (`1.6.1`)
 - Prometheus image: `prom/prometheus@sha256:7a34573f0b9c952286b33d537f233cd5b708e12263733aa646e50c33f598f16c` (`v2.53.5`)
 - ClickHouse image: `clickhouse/clickhouse-server@sha256:85b97f63dcfff47790d26bb5d5801637aaddb2b93e5e9aee27a686c2fb2b9916` (`24.3`)
-- Bering ref: `812b69982293a02b1be46ee2b2161beced2f658a`
-- Sheaft ref: `7a37c5908a721157f9178d6173395f1cbb29d493`
+- Bering release: `v1.0.0`
+- Bering ref: `d858f09a8cca8edf302646a54b28412d158c0ec2`
+- Sheaft release: `v1.0.0`
+- Sheaft ref: `fa40ee250b9dbf7f106ea7a0c49e35fdd5105172`
+- Bering model/snapshot contract: `1.3.0`
 
 The single source of truth for these pins is [compatibility-manifest.json](/compatibility-manifest.json) and [versions/toolchain.env](/versions/toolchain.env).
 

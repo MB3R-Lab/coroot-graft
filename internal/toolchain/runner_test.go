@@ -161,9 +161,9 @@ func TestRunnerHelperProcess(t *testing.T) {
 				"confidence":    1.0,
 				"schema": map[string]any{
 					"name":    "io.mb3r.bering.model",
-					"version": "1.0.0",
-					"uri":     "https://example.invalid/model.schema.json",
-					"digest":  "sha256:test",
+					"version": "1.3.0",
+					"uri":     "https://mb3r-lab.github.io/Bering/schema/model/v1.3.0/model.schema.json",
+					"digest":  "sha256:2aa8a3550a25dc626ba6d2f5833569efca2f382b9e5c9c3405be93695d7d48ae",
 				},
 			},
 		})
@@ -191,9 +191,9 @@ func TestRunnerHelperProcess(t *testing.T) {
 					"confidence":    1.0,
 					"schema": map[string]any{
 						"name":    "io.mb3r.bering.model",
-						"version": "1.0.0",
-						"uri":     "https://example.invalid/model.schema.json",
-						"digest":  "sha256:test",
+						"version": "1.3.0",
+						"uri":     "https://mb3r-lab.github.io/Bering/schema/model/v1.3.0/model.schema.json",
+						"digest":  "sha256:2aa8a3550a25dc626ba6d2f5833569efca2f382b9e5c9c3405be93695d7d48ae",
 					},
 				},
 			},
@@ -204,9 +204,9 @@ func TestRunnerHelperProcess(t *testing.T) {
 				"confidence":  1.0,
 				"schema": map[string]any{
 					"name":    "io.mb3r.bering.snapshot",
-					"version": "1.0.0",
-					"uri":     "https://example.invalid/snapshot.schema.json",
-					"digest":  "sha256:test-snapshot",
+					"version": "1.3.0",
+					"uri":     "https://mb3r-lab.github.io/Bering/schema/snapshot/v1.3.0/snapshot.schema.json",
+					"digest":  "sha256:cb778e5b0866d9ce5cfe7f23b8d98a339603593a0247cccd9cddaf05c7ae4bb1",
 				},
 			},
 		})
