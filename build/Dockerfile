@@ -2,7 +2,7 @@ FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS graft-build
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG TARGETVARIANT=""
-ARG VERSION=0.2.0
+ARG VERSION=1.0.0
 ARG COMMIT=unknown
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 WORKDIR /src
@@ -41,7 +41,7 @@ ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 ARG TARGETVARIANT=""
 ARG SHEAFT_REPOSITORY=https://github.com/MB3R-Lab/Sheaft
-ARG SHEAFT_REF=fa40ee250b9dbf7f106ea7a0c49e35fdd5105172
+ARG SHEAFT_REF=7f3e8e447762332f0eec5d8cf1938c1250e43302
 WORKDIR /src
 RUN apk add --no-cache git
 RUN git clone "${SHEAFT_REPOSITORY}" sheaft
@@ -54,7 +54,7 @@ RUN set -eu; \
     go build -trimpath -ldflags="-s -w" -o /out/sheaft ./cmd/sheaft
 
 FROM alpine:3.20
-ARG VERSION=0.2.0
+ARG VERSION=1.0.0
 ARG COMMIT=unknown
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 LABEL org.opencontainers.image.title="coroot-graft" \

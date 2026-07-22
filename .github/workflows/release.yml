@@ -118,27 +118,22 @@ jobs:
           set -euo pipefail
           VERSION="${VERSION_TAG#v}"
           OWNER_LC="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          cat > dist/release-notes.md <<EOF
-          coroot-graft ${VERSION_TAG}
+          RELEASE_NOTES_PATH="docs/releases/${VERSION_TAG}.md"
+          if [ -f "${RELEASE_NOTES_PATH}" ]; then
+            cp "${RELEASE_NOTES_PATH}" dist/release-notes.md
+          else
+            cat > dist/release-notes.md <<EOF
+          # coroot-graft ${VERSION_TAG}
 
-          Public release packages:
+          Public release packages include cross-platform CLI archives, source,
+          checksums, SBOMs, a Helm chart, and pinned compatibility metadata.
 
-          - cross-platform CLI archives
-          - source archive
-          - SHA256 checksums
-          - archive SBOMs
-          - packaged Helm chart
-          - compatibility-manifest.json
-          - toolchain.env
-
-          OCI image:
-          - ghcr.io/${OWNER_LC}/coroot-graft:${VERSION_TAG}
-          - ghcr.io/${OWNER_LC}/coroot-graft:${VERSION}
-
-          OCI Helm chart:
-          - oci://ghcr.io/${OWNER_LC}/charts/coroot-graft
-          - chart version ${VERSION}
+          - OCI image: ghcr.io/${OWNER_LC}/coroot-graft:${VERSION_TAG}
+          - OCI image: ghcr.io/${OWNER_LC}/coroot-graft:${VERSION}
+          - OCI chart: oci://ghcr.io/${OWNER_LC}/charts/coroot-graft
+          - Chart version: ${VERSION}
           EOF
+          fi
 
       - name: Create or update GitHub release
         shell: bash

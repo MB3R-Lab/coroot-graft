@@ -1,6 +1,6 @@
 # coroot-graft
 
-[![release](https://img.shields.io/badge/release-v0.2.0-blue)](https://github.com/MB3R-Lab/coroot-graft/releases/tag/v0.2.0)
+[![release](https://img.shields.io/badge/release-v1.0.0-blue)](https://github.com/MB3R-Lab/coroot-graft/releases/tag/v1.0.0)
 [![checks](https://img.shields.io/github/actions/workflow/status/MB3R-Lab/coroot-graft/ci.yml?branch=main&label=checks)](https://github.com/MB3R-Lab/coroot-graft/actions/workflows/ci.yml)
 [![mb3r toolchain](https://img.shields.io/badge/mb3r%20toolchain-v1-blue)](docs/compatibility.md)
 
@@ -20,13 +20,17 @@ It does not reimplement discovery and it does not reimplement the resilience eva
 
 Pipeline:
 
-1. `coroot-graft` logs into Coroot and reads a project snapshot from Coroot HTTP APIs.
-2. The Coroot snapshot is normalized into explicit Bering `topology_api` input.
+1. `coroot-graft` logs into Coroot and reads a stable topology window plus a
+   short runtime activity window from Coroot HTTP APIs.
+2. The stable Coroot snapshot is normalized into explicit Bering `topology_api` input.
 3. `coroot-graft` runs upstream `bering discover`.
 4. `coroot-graft` runs upstream `sheaft run` on the produced Bering artifact.
-5. `coroot-graft` exposes the latest gate/report state as Prometheus metrics.
-6. Coroot scrapes these metrics via `coroot-cluster-agent` and renders them in a custom dashboard.
-7. Optional Coroot webhook integration triggers re-runs on alerts, incidents, or deployments.
+5. It overlays current activity on the stable Sheaft report: an endpoint is
+   forced to `0` when its blocking dependency path contains a service that was
+   not observed in the short window.
+6. `coroot-graft` exposes the effective gate/report state as Prometheus metrics.
+7. Coroot scrapes these metrics via `coroot-cluster-agent` and renders them in a custom dashboard.
+8. Optional Coroot webhook integration triggers re-runs on alerts, incidents, or deployments.
 
 ## Simple Mental Model
 
@@ -34,7 +38,9 @@ Pipeline:
 - `coroot-graft` translates that observed graph into MB3R toolchain input.
 - `Bering` turns that input into canonical MB3R discovery artifacts.
 - `Sheaft` computes resilience posture and gate results from those artifacts.
-- `Coroot` renders the resulting posture back to engineers through custom metrics and a managed dashboard.
+- `coroot-graft` combines that stable posture with Coroot's latest service
+  observation, without deleting known topology.
+- `Coroot` renders the effective result back to engineers through custom metrics and a managed dashboard.
 
 In this MVP, `Coroot` is the primary source of topology membership and dependency context.
 
@@ -50,6 +56,7 @@ When this repo says "Coroot snapshot", it means the in-memory snapshot collected
 - dependencies
 - replica counts
 - optional traced HTTP entrypoints
+- a separate set of services observed in the short runtime activity window
 
 This snapshot is reconstructed from Coroot APIs on every sync. It is not a separate long-lived Coroot export format.
 
@@ -77,19 +84,37 @@ Those are the artifacts consumed by `Sheaft`.
 
 ## What The Dashboard Means
 
-The managed Coroot dashboard shows `resilience posture`, not raw runtime health.
+The managed Coroot dashboard combines two signals:
+
+- stable resilience posture calculated by Bering and Sheaft
+- current service observation from Coroot's short activity window
 
 It answers questions like:
 
 - which entrypoints are most fragile under service failures?
 - which downstream dependency hurts an upstream user path the most?
 - does the current topology pass the configured resilience gate?
+- which known services were not observed recently?
+- which endpoint paths are currently broken by an unobserved blocking dependency?
 
-It does not answer:
+When `cart` disappears from the activity window, the stable topology still
+contains `cart`, but every endpoint whose blocking path requires it is exported
+with availability `0`. The effective verdict becomes `warn` or `fail` according
+to the configured gate mode.
 
-- is the service healthy right now?
-- is a container currently down?
-- is there traffic in this exact second?
+This runtime overlay is intentionally narrower than full health monitoring. It
+does not explain why a service disappeared, replace alerts/incidents, or expose
+CPU and memory health. Built-in Coroot views remain the source for that detail.
+
+Detection is windowed rather than instantaneous. With the shipped defaults
+(`activity_window: 2m`, `interval: 1m`), a stopped service is reflected after it
+has left the activity window and the next sync completes.
+
+It does not answer on its own:
+
+- why did the service stop?
+- which alert or incident caused the outage?
+- what are the current CPU, memory, latency, and error details?
 
 For current health and incidents, use the built-in Coroot views.
 
@@ -99,8 +124,10 @@ For resilience posture and gate decisions, use the `coroot-graft` dashboard.
 
 | Question | Coroot built-in views | `coroot-graft` |
 | --- | --- | --- |
-| Is the service unhealthy right now? | Yes | No |
-| Is a container or instance down right now? | Yes | No |
+| Was the service observed in the latest activity window? | Yes | Yes |
+| Does an unobserved dependency break a modeled endpoint path? | No | Yes |
+| Why is a service or instance unhealthy? | Yes | No |
+| Is a container down at this exact second? | Yes | Windowed observation only |
 | Are there active alerts, incidents, or regressions right now? | Yes | No |
 | What applications and dependencies does Coroot currently observe? | Yes | Indirectly, as input |
 | What is the resilience posture of the currently observed topology? | No | Yes |
@@ -117,6 +144,8 @@ The dashboard gives engineers:
 - cross-profile resilience estimates
 - per-profile failure-mode estimates such as steady-state, service-fault, and fixed blast radius
 - per-endpoint availability estimates against configured thresholds
+- per-service recent observation (`coroot_graft_service_observed`)
+- per-endpoint runtime path availability (`coroot_graft_endpoint_runtime_available`)
 
 This is useful for release gating, topology reviews, dependency risk assessment, and resilience prioritization.
 
@@ -174,7 +203,7 @@ See `configs/graft.example.yaml` for the expected shape.
 
 Main config areas:
 
-- `coroot`: Coroot URL and credentials
+- `coroot`: Coroot URL, credentials, stable `time_window`, and short `activity_window`
 - `toolchain`: command lines for upstream `bering` and `sheaft`
 - `projects[]`: Coroot project mapping, analysis/policy config, include/exclude filters, edge overrides, scrape/webhook settings
 
@@ -184,6 +213,20 @@ Environment variables are expanded before YAML parsing, so production deployment
 coroot:
   password: "${COROOT_GRAFT_COROOT_PASSWORD}"
 ```
+
+`activity_window` defaults to `2m` and must not exceed `time_window`. The stable
+window preserves known services and dependencies; the activity window decides
+which of them are currently observed.
+
+## Runtime Artifacts
+
+For each project, the HTTP API exposes:
+
+- `/api/v1/projects/{project}/report`: effective runtime-adjusted report
+- `/api/v1/projects/{project}/sheaft-report`: raw Sheaft report over stable topology
+- `/api/v1/projects/{project}/summary`: effective summary
+- `/api/v1/projects/{project}/sheaft-summary`: raw Sheaft summary
+- `/api/v1/projects/{project}/activity`: active/inactive services and impacted endpoints
 
 ## Coroot Wiring
 
@@ -239,6 +282,7 @@ request body; the project and secret are taken from the URL.
 - Release assets and package matrix: `docs/release-assets.md`
 - Integration policy: `docs/integration-policy.md`
 - Machine-readable version pins: `compatibility-manifest.json`
+- Public v1.0.0 release notes: `docs/releases/v1.0.0.md`
 
 ## License
 

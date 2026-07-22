@@ -11,17 +11,21 @@ Release checklist:
    - [build/Dockerfile](/build/Dockerfile)
    - [Makefile](/Makefile)
    - [deploy/docker/coroot-compose.graft-local.yaml](/deploy/docker/coroot-compose.graft-local.yaml)
-3. Run the full local test suite:
+   - [README.md](/README.md) and [docs/install.md](/docs/install.md)
+3. Add repository-specific public release notes at `docs/releases/vX.Y.Z.md`.
+4. Run the full local test suite:
    - `go test -count=1 ./...`
    - `go build ./cmd/coroot-graft`
-4. Build the production image:
+5. Build the production image:
    - `make docker-build IMAGE=<registry>/coroot-graft:<tag> APP_VERSION=<tag>`
-5. Validate the Helm chart:
+6. Validate the Helm chart:
    - `make chart-lint`
    - `make chart-template`
-6. Validate release packages locally if GoReleaser is available:
+7. Validate release packages locally if GoReleaser is available:
    - `goreleaser release --clean --snapshot --skip=publish`
-7. Push the release commit and `vX.Y.Z` tag. The tag workflow is expected to publish:
+   - optionally set `RELEASE_VERSION` to preview a specific version; otherwise
+     the snapshot is built as `0.0.0-dev`
+8. Push the release commit and `vX.Y.Z` tag. The tag workflow is expected to publish:
    - GitHub Release archives
    - source archive
    - release checksums
@@ -29,7 +33,7 @@ Release checklist:
    - Helm chart package
    - multi-arch OCI image
    - OCI Helm chart
-8. After the tag workflow creates or updates the GitHub Release, verify that the `Release E2E` GitHub workflow passes against the pinned local Coroot stack. Treat the release as validated only after that workflow is green.
+9. After the tag workflow creates or updates the GitHub Release, verify that the `Release E2E` GitHub workflow passes against the pinned local Coroot stack. Treat the release as validated only after that workflow is green.
 
 The release workflow is expected to validate:
 

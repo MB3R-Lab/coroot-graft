@@ -20,9 +20,12 @@ The product intentionally keeps two different signal classes separate:
 - observed operational context from Coroot
 - simulated resilience posture from `Sheaft`
 
-`coroot-graft` consumes the first and publishes the second.
+`coroot-graft` publishes both the raw simulated posture and an effective result
+that overlays short-window Coroot service observation onto modeled blocking
+endpoint paths. Raw Sheaft artifacts remain separately accessible.
 
-It is not meant to replace Coroot's built-in health, incident, or alert views.
+The activity overlay reports observation and path impact. It is not meant to
+replace Coroot's built-in health, incident, root-cause, or alert views.
 
 ## Version-Pinned Adapter Surfaces
 

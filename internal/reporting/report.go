@@ -4,16 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"coroot-graft/internal/topology"
 )
 
 type Report struct {
-	Simulation       Simulation       `json:"simulation"`
-	EndpointResults  []EndpointResult `json:"endpoint_results"`
-	Summary          Summary          `json:"summary"`
-	PolicyEvaluation PolicyEvaluation `json:"policy_evaluation"`
-	ContractPolicy   *ContractPolicy  `json:"contract_policy,omitempty"`
-	Profiles         []Profile        `json:"profiles,omitempty"`
-	GeneratedAt      string           `json:"generated_at,omitempty"`
+	Simulation       Simulation              `json:"simulation"`
+	EndpointResults  []EndpointResult        `json:"endpoint_results"`
+	Summary          Summary                 `json:"summary"`
+	PolicyEvaluation PolicyEvaluation        `json:"policy_evaluation"`
+	ContractPolicy   *ContractPolicy         `json:"contract_policy,omitempty"`
+	Profiles         []Profile               `json:"profiles,omitempty"`
+	GeneratedAt      string                  `json:"generated_at,omitempty"`
+	RuntimeActivity  *topology.RuntimeImpact `json:"runtime_activity,omitempty"`
 }
 
 type Simulation struct {
@@ -83,4 +86,37 @@ func Load(path string) (*Report, error) {
 		return nil, fmt.Errorf("decode report json: %w", err)
 	}
 	return &rep, nil
+}
+
+func Save(path string, report *Report) error {
+	raw, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode report json: %w", err)
+	}
+	if err := os.WriteFile(path, append(raw, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write report json: %w", err)
+	}
+	return nil
+}
+
+// SaveEffective preserves the full upstream Sheaft report surface while
+// patching only the fields changed by the runtime activity overlay.
+func SaveEffective(rawPath, outputPath string, report *Report) error {
+	raw, err := os.ReadFile(rawPath)
+	if err != nil {
+		return fmt.Errorf("read raw report json: %w", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return fmt.Errorf("decode raw report json: %w", err)
+	}
+	patchEffectiveDocument(document, report)
+	encoded, err := json.MarshalIndent(document, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode effective report json: %w", err)
+	}
+	if err := os.WriteFile(outputPath, append(encoded, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write effective report json: %w", err)
+	}
+	return nil
 }

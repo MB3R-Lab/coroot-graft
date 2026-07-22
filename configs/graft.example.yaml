@@ -8,6 +8,7 @@ coroot:
   password: "change-me"
   http_timeout: 30s
   time_window: 1h
+  activity_window: 2m
 
 toolchain:
   bering:
@@ -18,7 +19,7 @@ toolchain:
 projects:
   - name: "production"
     coroot_project: "production"
-    interval: 5m
+    interval: 1m
     endpoint_mode: "service"
     include_apps:
       - "frontend*"

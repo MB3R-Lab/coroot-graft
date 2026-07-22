@@ -2,10 +2,12 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -94,6 +96,15 @@ func (o *Orchestrator) SyncProject(ctx context.Context, projectName, trigger str
 		if status.SummaryPath == "" {
 			status.SummaryPath = previous.SummaryPath
 		}
+		if status.RawReportPath == "" {
+			status.RawReportPath = previous.RawReportPath
+		}
+		if status.RawSummaryPath == "" {
+			status.RawSummaryPath = previous.RawSummaryPath
+		}
+		if status.ActivityPath == "" {
+			status.ActivityPath = previous.ActivityPath
+		}
 		if status.RunDir == "" {
 			status.RunDir = previous.RunDir
 		}
@@ -152,6 +163,16 @@ func (o *Orchestrator) SyncProject(ctx context.Context, projectName, trigger str
 		o.store.Put(status)
 		return status, err
 	}
+	runtimeImpact := topology.EvaluateRuntimeActivity(input, snapshot.Activity)
+	activityPath := filepath.Join(runDir, "runtime-activity.json")
+	if err := writeJSONFile(activityPath, runtimeImpact); err != nil {
+		status.Status = "error"
+		status.Error = err.Error()
+		status.FinishedAt = time.Now().UTC()
+		restorePrevious(&status)
+		o.store.Put(status)
+		return status, err
+	}
 
 	topologyPath := filepath.Join(runDir, "topology-input.yaml")
 	if err := writeYAML(topologyPath, input); err != nil {
@@ -195,8 +216,27 @@ func (o *Orchestrator) SyncProject(ctx context.Context, projectName, trigger str
 		o.store.Put(status)
 		return status, err
 	}
+	reporting.ApplyRuntimeImpact(report, runtimeImpact)
+	effectiveReportPath := filepath.Join(runDir, "report.json")
+	if err := reporting.SaveEffective(runResult.ReportPath, effectiveReportPath, report); err != nil {
+		status.Status = "error"
+		status.Error = err.Error()
+		status.FinishedAt = time.Now().UTC()
+		restorePrevious(&status)
+		o.store.Put(status)
+		return status, err
+	}
+	effectiveSummaryPath := filepath.Join(runDir, "summary.md")
+	if err := writeRuntimeSummary(runResult.SummaryPath, effectiveSummaryPath, report, runtimeImpact); err != nil {
+		status.Status = "error"
+		status.Error = err.Error()
+		status.FinishedAt = time.Now().UTC()
+		restorePrevious(&status)
+		o.store.Put(status)
+		return status, err
+	}
 
-	if err := o.refreshLatest(projectRoot, topologyPath, runResult); err != nil {
+	if err := o.refreshLatest(projectRoot, topologyPath, activityPath, effectiveReportPath, effectiveSummaryPath, runResult); err != nil {
 		status.Status = "error"
 		status.Error = err.Error()
 		status.FinishedAt = time.Now().UTC()
@@ -212,18 +252,21 @@ func (o *Orchestrator) SyncProject(ctx context.Context, projectName, trigger str
 	}
 
 	status = state.ProjectStatus{
-		Project:      projectName,
-		Trigger:      trigger,
-		Status:       "ok",
-		StartedAt:    startedAt,
-		FinishedAt:   time.Now().UTC(),
-		RunDir:       filepath.Join(projectRoot, "latest"),
-		TopologyPath: filepath.Join(projectRoot, "latest", "topology-input.yaml"),
-		ModelPath:    filepath.Join(projectRoot, "latest", "bering-model.json"),
-		SnapshotPath: filepath.Join(projectRoot, "latest", "bering-snapshot.json"),
-		ReportPath:   filepath.Join(projectRoot, "latest", "report.json"),
-		SummaryPath:  filepath.Join(projectRoot, "latest", "summary.md"),
-		Report:       report,
+		Project:        projectName,
+		Trigger:        trigger,
+		Status:         "ok",
+		StartedAt:      startedAt,
+		FinishedAt:     time.Now().UTC(),
+		RunDir:         filepath.Join(projectRoot, "latest"),
+		TopologyPath:   filepath.Join(projectRoot, "latest", "topology-input.yaml"),
+		ModelPath:      filepath.Join(projectRoot, "latest", "bering-model.json"),
+		SnapshotPath:   filepath.Join(projectRoot, "latest", "bering-snapshot.json"),
+		ReportPath:     filepath.Join(projectRoot, "latest", "report.json"),
+		SummaryPath:    filepath.Join(projectRoot, "latest", "summary.md"),
+		RawReportPath:  filepath.Join(projectRoot, "latest", "sheaft-report.json"),
+		RawSummaryPath: filepath.Join(projectRoot, "latest", "sheaft-summary.md"),
+		ActivityPath:   filepath.Join(projectRoot, "latest", "runtime-activity.json"),
+		Report:         report,
 	}
 	o.store.Put(status)
 	return status, nil
@@ -231,8 +274,21 @@ func (o *Orchestrator) SyncProject(ctx context.Context, projectName, trigger str
 
 func (o *Orchestrator) captureSnapshot(ctx context.Context, project config.ProjectConfig, capturedAt time.Time) (topology.Snapshot, error) {
 	window := o.cfg.Coroot.TimeWindow
+	if window <= 0 {
+		window = config.DefaultTimeWindow
+	}
 	if project.TimeWindow > 0 {
 		window = project.TimeWindow
+	}
+	activityWindow := o.cfg.Coroot.ActivityWindow
+	if activityWindow <= 0 {
+		activityWindow = config.DefaultActivityWindow
+	}
+	if project.ActivityWindow > 0 {
+		activityWindow = project.ActivityWindow
+	}
+	if activityWindow > window {
+		return topology.Snapshot{}, fmt.Errorf("activity window %s must not exceed topology window %s", activityWindow, window)
 	}
 	from := capturedAt.Add(-window)
 	to := capturedAt
@@ -292,11 +348,43 @@ func (o *Orchestrator) captureSnapshot(ctx context.Context, project config.Proje
 		apps = append(apps, item)
 	}
 
+	activityFrom := capturedAt.Add(-activityWindow)
+	activityOverview, err := o.coroot.GetOverviewMap(ctx, project.CorootProject, activityFrom, to)
+	if err != nil {
+		return topology.Snapshot{}, fmt.Errorf("load runtime activity window: %w", err)
+	}
+	activeServices := make(map[string]bool, len(activityOverview.Map))
+	for _, app := range activityOverview.Map {
+		if app.ID != "" {
+			activeServices[app.ID] = true
+		}
+	}
+	for _, app := range overviewApps {
+		if app.ID == "" || activeServices[app.ID] {
+			continue
+		}
+		liveView, liveErr := o.coroot.GetApplication(ctx, project.CorootProject, app.ID, activityFrom, to)
+		if liveErr != nil {
+			if coroot.IsNotFound(liveErr) {
+				continue
+			}
+			return topology.Snapshot{}, fmt.Errorf("load runtime activity for application %s: %w", app.ID, liveErr)
+		}
+		if len(liveView.AppMap.Instances) > 0 {
+			activeServices[app.ID] = true
+		}
+	}
+
 	return topology.Snapshot{
 		Project:    project.Name,
 		CorootRef:  corootRef(project.CorootProject, capturedAt),
 		CapturedAt: capturedAt,
 		Apps:       apps,
+		Activity: topology.ActivitySnapshot{
+			WindowStart:    activityFrom,
+			WindowEnd:      to,
+			ActiveServices: activeServices,
+		},
 	}, nil
 }
 
@@ -309,17 +397,20 @@ func (o *Orchestrator) resolveProject(ctx context.Context, project config.Projec
 	return project, nil
 }
 
-func (o *Orchestrator) refreshLatest(projectRoot, topologyPath string, result toolchain.Result) error {
+func (o *Orchestrator) refreshLatest(projectRoot, topologyPath, activityPath, reportPath, summaryPath string, result toolchain.Result) error {
 	latestDir := filepath.Join(projectRoot, "latest")
 	if err := os.MkdirAll(latestDir, 0o755); err != nil {
 		return fmt.Errorf("create latest dir: %w", err)
 	}
 	files := map[string]string{
 		topologyPath:        filepath.Join(latestDir, "topology-input.yaml"),
+		activityPath:        filepath.Join(latestDir, "runtime-activity.json"),
 		result.ModelPath:    filepath.Join(latestDir, "bering-model.json"),
 		result.SnapshotPath: filepath.Join(latestDir, "bering-snapshot.json"),
-		result.ReportPath:   filepath.Join(latestDir, "report.json"),
-		result.SummaryPath:  filepath.Join(latestDir, "summary.md"),
+		reportPath:          filepath.Join(latestDir, "report.json"),
+		summaryPath:         filepath.Join(latestDir, "summary.md"),
+		result.ReportPath:   filepath.Join(latestDir, "sheaft-report.json"),
+		result.SummaryPath:  filepath.Join(latestDir, "sheaft-summary.md"),
 	}
 	for src, dst := range files {
 		if err := copyFile(src, dst); err != nil {
@@ -336,6 +427,55 @@ func writeYAML(path string, value any) error {
 	}
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		return fmt.Errorf("write topology yaml: %w", err)
+	}
+	return nil
+}
+
+func writeJSONFile(path string, value any) error {
+	raw, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode runtime activity json: %w", err)
+	}
+	if err := os.WriteFile(path, append(raw, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write runtime activity json: %w", err)
+	}
+	return nil
+}
+
+func writeRuntimeSummary(rawPath, outputPath string, report *reporting.Report, impact topology.RuntimeImpact) error {
+	raw, err := os.ReadFile(rawPath)
+	if err != nil {
+		return fmt.Errorf("read raw Sheaft summary: %w", err)
+	}
+	var b strings.Builder
+	b.WriteString("# coroot-graft effective result\n\n")
+	b.WriteString(fmt.Sprintf("- Effective decision: `%s`\n", report.PolicyEvaluation.Decision))
+	b.WriteString(fmt.Sprintf("- Runtime activity window: `%s` to `%s`\n", impact.WindowStart.UTC().Format(time.RFC3339), impact.WindowEnd.UTC().Format(time.RFC3339)))
+	if len(impact.InactiveServices) == 0 {
+		b.WriteString("- Services not observed: none\n")
+	} else {
+		b.WriteString(fmt.Sprintf("- Services not observed: `%s`\n", strings.Join(impact.InactiveServices, "`, `")))
+	}
+	if len(impact.ImpactedEndpoints) == 0 {
+		b.WriteString("- Runtime-impacted endpoints: none\n")
+	} else {
+		endpointIDs := make([]string, 0, len(impact.ImpactedEndpoints))
+		for endpointID := range impact.ImpactedEndpoints {
+			endpointIDs = append(endpointIDs, endpointID)
+		}
+		sort.Strings(endpointIDs)
+		b.WriteString("- Runtime-impacted endpoints:\n")
+		for _, endpointID := range endpointIDs {
+			b.WriteString(fmt.Sprintf("  - `%s` via `%s`\n", endpointID, strings.Join(impact.ImpactedEndpoints[endpointID], "`, `")))
+		}
+	}
+	b.WriteString("\n## Raw Sheaft summary\n\n")
+	b.Write(raw)
+	if len(raw) == 0 || raw[len(raw)-1] != '\n' {
+		b.WriteByte('\n')
+	}
+	if err := os.WriteFile(outputPath, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("write effective summary: %w", err)
 	}
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,22 @@ type Client struct {
 	email    string
 	password string
 	http     *http.Client
+}
+
+type HTTPError struct {
+	Method     string
+	Path       string
+	StatusCode int
+	Message    string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("coroot %s %s failed: %s", e.Method, e.Path, e.Message)
+}
+
+func IsNotFound(err error) bool {
+	var httpErr *HTTPError
+	return errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound
 }
 
 type UserProject struct {
@@ -451,7 +468,12 @@ func (c *Client) doBytes(ctx context.Context, method, apiPath string, query url.
 			if msg == "" {
 				msg = resp.Status
 			}
-			return nil, fmt.Errorf("coroot %s %s failed: %s", method, apiPath, msg)
+			return nil, &HTTPError{
+				Method:     method,
+				Path:       apiPath,
+				StatusCode: resp.StatusCode,
+				Message:    msg,
+			}
 		}
 		return raw, nil
 	}

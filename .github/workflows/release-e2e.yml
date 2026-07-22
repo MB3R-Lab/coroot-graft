@@ -133,6 +133,7 @@ jobs:
             password: "secret"
             http_timeout: 30s
             time_window: 1h
+            activity_window: 15s
 
           toolchain:
             bering:
@@ -160,6 +161,43 @@ jobs:
 
       - name: Run live Coroot sync
         run: go run ./cmd/coroot-graft sync -config .cache/coroot/graft-release-e2e.yaml -project live-default
+
+      - name: Verify stopped service changes the effective report
+        run: |
+          docker compose -f deploy/docker/demo-compose.yaml stop checkout
+          sleep 20
+          go run ./cmd/coroot-graft sync -config .cache/coroot/graft-release-e2e.yaml -project live-default
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          latest = Path('.coroot-graft-release/projects/live-default/latest')
+          activity = json.loads((latest / 'runtime-activity.json').read_text(encoding='utf-8'))
+          effective = json.loads((latest / 'report.json').read_text(encoding='utf-8'))
+          raw = json.loads((latest / 'sheaft-report.json').read_text(encoding='utf-8'))
+
+          inactive = activity.get('inactive_services') or []
+          if not any('checkout' in service for service in inactive):
+              raise SystemExit(f'checkout was not detected as inactive: {inactive}')
+          if not activity.get('impacted_endpoints'):
+              raise SystemExit(f'no endpoints were linked to the stopped checkout service: {activity}')
+
+          effective_values = [
+              item.get('availability')
+              for item in effective.get('endpoint_results') or []
+          ]
+          if 0 not in effective_values:
+              raise SystemExit(f'effective report did not zero an impacted endpoint: {effective_values}')
+          if (effective.get('policy_evaluation') or {}).get('decision') not in ('warn', 'fail'):
+              raise SystemExit(f'effective policy did not degrade: {effective.get("policy_evaluation")}')
+
+          raw_values = [
+              item.get('availability')
+              for item in raw.get('endpoint_results') or []
+          ]
+          if not raw_values or max(raw_values) <= 0:
+              raise SystemExit(f'raw Sheaft report was unexpectedly replaced by runtime state: {raw_values}')
+          PY
 
       - name: Install dashboard into live Coroot
         run: go run ./cmd/coroot-graft install-dashboard -config .cache/coroot/graft-release-e2e.yaml -project live-default

@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/mb3r-lab/coroot-graft
-  tag: v0.2.0
+  tag: v1.0.0
   digest: ""
   pullPolicy: IfNotPresent
 
@@ -26,6 +26,7 @@ config:
       password: "${COROOT_GRAFT_COROOT_PASSWORD}"
       http_timeout: 30s
       time_window: 1h
+      activity_window: 2m
 
     toolchain:
       bering:
@@ -36,7 +37,7 @@ config:
     projects:
       - name: "production"
         coroot_project: "production"
-        interval: 5m
+        interval: 1m
         endpoint_mode: "service"
         include_external: true
         exclude_categories:
@@ -65,6 +66,9 @@ config:
         - name: fixed-blast-radius
           sampling_mode: fixed_k_service_set
           fixed_k_failures: 1
+        - name: fixed-replica-fraction
+          sampling_mode: fixed_k_replica_slots
+          failure_probability: 0.05
 
       gate:
         mode: warn

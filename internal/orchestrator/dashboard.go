@@ -57,6 +57,17 @@ func BuildDashboard(project config.ProjectConfig) coroot.Dashboard {
 					},
 				},
 				{
+					Name: "Runtime activity",
+					Panels: []coroot.DashboardPanel{
+						linePanel("Services observed", "1 when Coroot observed the service in the latest short activity window; 0 when it was not observed", 0, 0, 6, 3,
+							query(`coroot_graft_service_observed%s`, projectFilter, "{{ service }}", "#0284c7"),
+						),
+						linePanel("Endpoint runtime availability", "0 when an endpoint requires a blocking service that was not observed in the latest activity window", 6, 0, 6, 3,
+							query(`coroot_graft_endpoint_runtime_available%s`, projectFilter, "{{ endpoint }}", "#dc2626"),
+						),
+					},
+				},
+				{
 					Name: "Endpoints",
 					Panels: []coroot.DashboardPanel{
 						linePanel("Endpoint availability", "Availability by endpoint and profile", 0, 0, 12, 4,

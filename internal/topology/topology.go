@@ -16,6 +16,21 @@ type Snapshot struct {
 	CorootRef  string
 	CapturedAt time.Time
 	Apps       []Application
+	Activity   ActivitySnapshot
+}
+
+type ActivitySnapshot struct {
+	WindowStart    time.Time       `json:"window_start"`
+	WindowEnd      time.Time       `json:"window_end"`
+	ActiveServices map[string]bool `json:"-"`
+}
+
+type RuntimeImpact struct {
+	WindowStart       time.Time           `json:"window_start"`
+	WindowEnd         time.Time           `json:"window_end"`
+	ActiveServices    []string            `json:"active_services"`
+	InactiveServices  []string            `json:"inactive_services"`
+	ImpactedEndpoints map[string][]string `json:"impacted_endpoints"`
 }
 
 type Application struct {
@@ -178,6 +193,67 @@ func Build(project config.ProjectConfig, snapshot Snapshot) (Input, error) {
 		Edges:     edges,
 		Endpoints: endpoints,
 	}, nil
+}
+
+// EvaluateRuntimeActivity keeps the stable topology intact while determining
+// which endpoints are unavailable in the current Coroot observation window.
+// An endpoint is unavailable when its entry service or a transitively required
+// blocking synchronous dependency was not observed.
+func EvaluateRuntimeActivity(input Input, activity ActivitySnapshot) RuntimeImpact {
+	impact := RuntimeImpact{
+		WindowStart:       activity.WindowStart,
+		WindowEnd:         activity.WindowEnd,
+		ImpactedEndpoints: map[string][]string{},
+	}
+
+	services := make(map[string]struct{}, len(input.Services))
+	for _, service := range input.Services {
+		services[service.ID] = struct{}{}
+		if activity.ActiveServices[service.ID] {
+			impact.ActiveServices = append(impact.ActiveServices, service.ID)
+		} else {
+			impact.InactiveServices = append(impact.InactiveServices, service.ID)
+		}
+	}
+	sort.Strings(impact.ActiveServices)
+	sort.Strings(impact.InactiveServices)
+
+	required := map[string][]string{}
+	for _, edge := range input.Edges {
+		if !edge.Blocking || edge.Kind == "async" {
+			continue
+		}
+		required[edge.From] = append(required[edge.From], edge.To)
+	}
+
+	for _, endpoint := range input.Endpoints {
+		endpointID := endpoint.ID
+		if endpointID == "" {
+			endpointID = endpointStableID(endpoint, endpoint.EntryService)
+		}
+		seen := map[string]bool{}
+		stack := []string{endpoint.EntryService}
+		missing := make([]string, 0)
+		for len(stack) > 0 {
+			last := len(stack) - 1
+			serviceID := stack[last]
+			stack = stack[:last]
+			if seen[serviceID] {
+				continue
+			}
+			seen[serviceID] = true
+			if _, known := services[serviceID]; known && !activity.ActiveServices[serviceID] {
+				missing = append(missing, serviceID)
+			}
+			stack = append(stack, required[serviceID]...)
+		}
+		if len(missing) > 0 {
+			sort.Strings(missing)
+			impact.ImpactedEndpoints[endpointID] = missing
+		}
+	}
+
+	return impact
 }
 
 func filterApplications(project config.ProjectConfig, apps []Application) []Application {

@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+## v1.0.0 - 2026-07-22
+
+First stable `coroot-graft` release.
+
+Included in this release:
+
+- separated the stable Coroot topology window from a short runtime activity
+  window, matching the stable-topology/current-observation behavior used by
+  the OpenTelemetry Demo integration
+- kept inactive services in Bering and Sheaft artifacts while forcing affected
+  blocking endpoint paths to zero in the effective `coroot-graft` report
+- added runtime service and endpoint metrics plus managed dashboard panels, so
+  stopping a dependency such as `cart` is visible after the activity window
+- preserved raw Sheaft report and summary artifacts separately from the
+  runtime-adjusted effective report
+- added `coroot.activity_window` and per-project `activity_window` settings;
+  the default is `2m`
+- pinned upstream Sheaft to `v1.1.0` while keeping Bering at `v1.0.0`
+- retained the Bering model/snapshot contract baseline at `1.3.0`
+- added a `fixed_k_replica_slots` example profile for fixed-fraction replica
+  failure experiments; `independent_replica` remains the default stochastic
+  baseline
+- updated Docker, Helm, CI, and release build defaults to embed the same
+  immutable Sheaft ref
 - Aligned README, install, release, and integration documentation with the
   published v0.2.0 package surface and MB3R v1 compatibility baseline.
 - Clarified that Coroot webhooks call the user's deployed `coroot-graft`

@@ -61,7 +61,7 @@ source:
   name_template: "{{ .ProjectName }}_{{ .Version }}_source"
 
 snapshot:
-  version_template: "{{ if .Env.RELEASE_VERSION }}{{ .Env.RELEASE_VERSION }}{{ else }}0.0.0-dev{{ end }}"
+  version_template: "{{ with index .Env \"RELEASE_VERSION\" }}{{ . }}{{ else }}0.0.0-dev{{ end }}"
 
 changelog:
   disable: true

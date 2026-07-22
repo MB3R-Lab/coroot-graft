@@ -121,8 +121,14 @@ func (s *Server) projectRoutes(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusAccepted, map[string]any{"project": project, "queued": true})
 	case len(parts) == 2 && parts[1] == "report" && r.Method == http.MethodGet:
 		s.serveFile(w, project, func(status state.ProjectStatus) string { return status.ReportPath }, "application/json")
+	case len(parts) == 2 && parts[1] == "sheaft-report" && r.Method == http.MethodGet:
+		s.serveFile(w, project, func(status state.ProjectStatus) string { return status.RawReportPath }, "application/json")
 	case len(parts) == 2 && parts[1] == "summary" && r.Method == http.MethodGet:
 		s.serveFile(w, project, func(status state.ProjectStatus) string { return status.SummaryPath }, "text/markdown; charset=utf-8")
+	case len(parts) == 2 && parts[1] == "sheaft-summary" && r.Method == http.MethodGet:
+		s.serveFile(w, project, func(status state.ProjectStatus) string { return status.RawSummaryPath }, "text/markdown; charset=utf-8")
+	case len(parts) == 2 && parts[1] == "activity" && r.Method == http.MethodGet:
+		s.serveFile(w, project, func(status state.ProjectStatus) string { return status.ActivityPath }, "application/json")
 	case len(parts) == 2 && parts[1] == "topology" && r.Method == http.MethodGet:
 		s.serveFile(w, project, func(status state.ProjectStatus) string { return status.TopologyPath }, "application/yaml")
 	default:

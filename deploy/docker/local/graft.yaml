@@ -8,6 +8,7 @@ coroot:
   password: "${COROOT_GRAFT_COROOT_PASSWORD}"
   http_timeout: 30s
   time_window: 1h
+  activity_window: 2m
 
 toolchain:
   bering:

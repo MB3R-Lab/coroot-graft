@@ -14,6 +14,7 @@ import (
 	"coroot-graft/internal/orchestrator"
 	"coroot-graft/internal/reporting"
 	"coroot-graft/internal/state"
+	"coroot-graft/internal/topology"
 
 	io_prometheus_client "github.com/prometheus/client_model/go"
 )
@@ -54,6 +55,18 @@ func TestProjectRoutesServeStoredStatusAndArtifacts(t *testing.T) {
 	}
 	if body := reportRec.Body.String(); !strings.Contains(body, `"decision":"pass"`) || !strings.Contains(body, `"endpoint_id":"entry::frontend"`) {
 		t.Fatalf("unexpected report body: %q", body)
+	}
+
+	rawReportRec := httptest.NewRecorder()
+	srv.projectRoutes(rawReportRec, httptest.NewRequest(http.MethodGet, "/api/v1/projects/prod/sheaft-report", nil))
+	if rawReportRec.Code != http.StatusOK || !strings.Contains(rawReportRec.Body.String(), `"raw":true`) {
+		t.Fatalf("unexpected raw Sheaft report response: code=%d body=%q", rawReportRec.Code, rawReportRec.Body.String())
+	}
+
+	activityRec := httptest.NewRecorder()
+	srv.projectRoutes(activityRec, httptest.NewRequest(http.MethodGet, "/api/v1/projects/prod/activity", nil))
+	if activityRec.Code != http.StatusOK || !strings.Contains(activityRec.Body.String(), `"inactive_services":["cart"]`) {
+		t.Fatalf("unexpected activity response: code=%d body=%q", activityRec.Code, activityRec.Body.String())
 	}
 
 	summaryRec := httptest.NewRecorder()
@@ -127,6 +140,9 @@ func TestMetricsCollectorExportsLatestReportState(t *testing.T) {
 	assertGaugeValue(t, families, "coroot_graft_contract_policy_state", map[string]string{"project": "prod", "status": "current", "action": "warn"}, 1)
 	assertGaugeValue(t, families, "coroot_graft_profile_decision_state", map[string]string{"project": "prod", "profile": "steady-state", "decision": "pass"}, 1)
 	assertGaugeValue(t, families, "coroot_graft_endpoint_status_state", map[string]string{"project": "prod", "profile": "steady-state", "endpoint": "entry::frontend", "status": "pass"}, 1)
+	assertGaugeValue(t, families, "coroot_graft_service_observed", map[string]string{"project": "prod", "service": "frontend"}, 1)
+	assertGaugeValue(t, families, "coroot_graft_service_observed", map[string]string{"project": "prod", "service": "cart"}, 0)
+	assertGaugeValue(t, families, "coroot_graft_endpoint_runtime_available", map[string]string{"project": "prod", "endpoint": "entry::frontend"}, 0)
 }
 
 func newTestServer(t *testing.T) (*Server, chan string, state.ProjectStatus) {
@@ -198,6 +214,11 @@ func newTestServer(t *testing.T) (*Server, chan string, state.ProjectStatus) {
 			Status: "current",
 			Action: "warn",
 		},
+		RuntimeActivity: &topology.RuntimeImpact{
+			ActiveServices:    []string{"frontend"},
+			InactiveServices:  []string{"cart"},
+			ImpactedEndpoints: map[string][]string{"entry::frontend": {"cart"}},
+		},
 	}
 
 	reportPath := filepath.Join(workDir, "report.json")
@@ -207,6 +228,14 @@ func newTestServer(t *testing.T) (*Server, chan string, state.ProjectStatus) {
 	}
 	if err := os.WriteFile(reportPath, append(rawReport, '\n'), 0o644); err != nil {
 		t.Fatalf("write report: %v", err)
+	}
+	rawSheaftReportPath := filepath.Join(workDir, "sheaft-report.json")
+	if err := os.WriteFile(rawSheaftReportPath, []byte("{\"raw\":true}\n"), 0o644); err != nil {
+		t.Fatalf("write raw Sheaft report: %v", err)
+	}
+	activityPath := filepath.Join(workDir, "runtime-activity.json")
+	if err := os.WriteFile(activityPath, []byte("{\"inactive_services\":[\"cart\"]}\n"), 0o644); err != nil {
+		t.Fatalf("write runtime activity: %v", err)
 	}
 
 	summaryPath := filepath.Join(workDir, "summary.md")
@@ -220,16 +249,18 @@ func newTestServer(t *testing.T) (*Server, chan string, state.ProjectStatus) {
 	}
 
 	status := state.ProjectStatus{
-		Project:      "prod",
-		Trigger:      "test",
-		Status:       "ok",
-		StartedAt:    time.Date(2026, 3, 18, 10, 0, 0, 0, time.UTC),
-		FinishedAt:   time.Date(2026, 3, 18, 10, 0, 2, 0, time.UTC),
-		RunDir:       workDir,
-		TopologyPath: topologyPath,
-		ReportPath:   reportPath,
-		SummaryPath:  summaryPath,
-		Report:       &report,
+		Project:       "prod",
+		Trigger:       "test",
+		Status:        "ok",
+		StartedAt:     time.Date(2026, 3, 18, 10, 0, 0, 0, time.UTC),
+		FinishedAt:    time.Date(2026, 3, 18, 10, 0, 2, 0, time.UTC),
+		RunDir:        workDir,
+		TopologyPath:  topologyPath,
+		ReportPath:    reportPath,
+		SummaryPath:   summaryPath,
+		RawReportPath: rawSheaftReportPath,
+		ActivityPath:  activityPath,
+		Report:        &report,
 	}
 	orch.Store().Put(status)
 

@@ -19,7 +19,7 @@ Published package entrypoints:
 Example image pull:
 
 ```bash
-docker pull ghcr.io/mb3r-lab/coroot-graft:v0.2.0
+docker pull ghcr.io/mb3r-lab/coroot-graft:v1.0.0
 ```
 
 Create the namespace and secret before installing the chart:
@@ -35,7 +35,7 @@ Install from the published OCI chart:
 
 ```bash
 helm upgrade --install coroot-graft oci://ghcr.io/mb3r-lab/charts/coroot-graft \
-  --version 0.2.0 \
+  --version 1.0.0 \
   --namespace coroot-graft \
   --set secrets.existingSecret=coroot-graft-secrets
 ```
@@ -104,3 +104,14 @@ coroot:
 ```
 
 The same pattern works for per-project webhook secrets and any other sensitive values that should not live in Git.
+
+`coroot.activity_window` defaults to `2m`. It is intentionally shorter than
+`coroot.time_window`: the long window preserves the known architecture while
+the short window determines whether a service is currently observed. The
+effective dashboard changes after a stopped service leaves the activity window
+and the next project sync completes.
+
+The effective report is served at `/api/v1/projects/{project}/report`. The raw
+stable-topology Sheaft result remains available at
+`/api/v1/projects/{project}/sheaft-report`, and runtime observation details are
+available at `/api/v1/projects/{project}/activity`.

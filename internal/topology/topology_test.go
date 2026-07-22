@@ -1,7 +1,9 @@
 package topology
 
 import (
+	"reflect"
 	"testing"
+	"time"
 
 	"coroot-graft/internal/config"
 	"coroot-graft/internal/coroot"
@@ -9,6 +11,42 @@ import (
 
 func boolPtr(v bool) *bool {
 	return &v
+}
+
+func TestEvaluateRuntimeActivityUsesBlockingDependencyClosure(t *testing.T) {
+	now := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
+	input := Input{
+		Services: []Service{{ID: "frontend"}, {ID: "checkout"}, {ID: "cart"}, {ID: "events"}},
+		Edges: []Edge{
+			{From: "frontend", To: "checkout", Kind: "sync", Blocking: true},
+			{From: "checkout", To: "cart", Kind: "sync", Blocking: true},
+			{From: "checkout", To: "events", Kind: "async", Blocking: false},
+		},
+		Endpoints: []EndpointRef{
+			{ID: "view-cart", EntryService: "frontend"},
+			{ID: "events-worker", EntryService: "events"},
+		},
+	}
+
+	impact := EvaluateRuntimeActivity(input, ActivitySnapshot{
+		WindowStart: now.Add(-2 * time.Minute),
+		WindowEnd:   now,
+		ActiveServices: map[string]bool{
+			"frontend": true,
+			"checkout": true,
+			"events":   true,
+		},
+	})
+
+	if !reflect.DeepEqual(impact.InactiveServices, []string{"cart"}) {
+		t.Fatalf("unexpected inactive services: %+v", impact.InactiveServices)
+	}
+	if !reflect.DeepEqual(impact.ImpactedEndpoints["view-cart"], []string{"cart"}) {
+		t.Fatalf("unexpected view-cart impact: %+v", impact.ImpactedEndpoints)
+	}
+	if _, impacted := impact.ImpactedEndpoints["events-worker"]; impacted {
+		t.Fatalf("async dependency must not impact events-worker: %+v", impact.ImpactedEndpoints)
+	}
 }
 
 func TestBuildUsesSyntheticEndpointsWhenMissing(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestProjectValidationRejectsMixedAnalysisAndPolicy(t *testing.T) {
@@ -78,6 +79,35 @@ projects:
 	}
 	if cfg.Projects[0].AnalysisPath != analysisPath {
 		t.Fatalf("expected normalized analysis path %q, got %q", analysisPath, cfg.Projects[0].AnalysisPath)
+	}
+	if cfg.Coroot.ActivityWindow != DefaultActivityWindow {
+		t.Fatalf("expected default activity window %s, got %s", DefaultActivityWindow, cfg.Coroot.ActivityWindow)
+	}
+}
+
+func TestConfigRejectsActivityWindowLongerThanTopologyWindow(t *testing.T) {
+	cfg := Config{
+		ListenAddress: ":8095",
+		StorageDir:    ".coroot-graft",
+		SyncTimeout:   DefaultSyncTimeout,
+		Coroot: CorootConfig{
+			BaseURL:        "http://127.0.0.1:8080",
+			Email:          "admin",
+			Password:       "secret",
+			HTTPTimeout:    DefaultHTTPTimeout,
+			TimeWindow:     time.Minute,
+			ActivityWindow: 2 * time.Minute,
+		},
+		Toolchain: ToolchainConfig{
+			Bering: CommandConfig{Command: []string{"bering"}},
+			Sheaft: CommandConfig{Command: []string{"sheaft"}},
+		},
+		Projects: []ProjectConfig{
+			{Name: "prod", CorootProject: "prod", AnalysisPath: "analysis.yaml", EndpointMode: "service"},
+		},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected activity window validation error")
 	}
 }
 

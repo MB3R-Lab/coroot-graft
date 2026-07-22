@@ -26,6 +26,8 @@ type metricsCollector struct {
 	endpointAvailability *prometheus.Desc
 	endpointThreshold    *prometheus.Desc
 	endpointStatus       *prometheus.Desc
+	serviceObserved      *prometheus.Desc
+	endpointRuntime      *prometheus.Desc
 }
 
 func newMetricsCollector(store *state.Store) *metricsCollector {
@@ -116,6 +118,16 @@ func newMetricsCollector(store *state.Store) *metricsCollector {
 			"Endpoint status state by endpoint and profile",
 			[]string{"project", "profile", "endpoint", "status"}, nil,
 		),
+		serviceObserved: prometheus.NewDesc(
+			"coroot_graft_service_observed",
+			"Whether the service was observed in the latest runtime activity window",
+			[]string{"project", "service"}, nil,
+		),
+		endpointRuntime: prometheus.NewDesc(
+			"coroot_graft_endpoint_runtime_available",
+			"Whether every blocking service required by the endpoint was observed in the latest runtime activity window",
+			[]string{"project", "endpoint"}, nil,
+		),
 	}
 }
 
@@ -137,6 +149,8 @@ func (c *metricsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.endpointAvailability
 	ch <- c.endpointThreshold
 	ch <- c.endpointStatus
+	ch <- c.serviceObserved
+	ch <- c.endpointRuntime
 }
 
 func (c *metricsCollector) Collect(ch chan<- prometheus.Metric) {
@@ -156,6 +170,30 @@ func (c *metricsCollector) Collect(ch chan<- prometheus.Metric) {
 		report := status.Report
 		if report == nil {
 			continue
+		}
+		if report.RuntimeActivity != nil {
+			for _, serviceID := range report.RuntimeActivity.ActiveServices {
+				ch <- prometheus.MustNewConstMetric(c.serviceObserved, prometheus.GaugeValue, 1, status.Project, serviceID)
+			}
+			for _, serviceID := range report.RuntimeActivity.InactiveServices {
+				ch <- prometheus.MustNewConstMetric(c.serviceObserved, prometheus.GaugeValue, 0, status.Project, serviceID)
+			}
+			endpoints := map[string]struct{}{}
+			for _, endpoint := range report.EndpointResults {
+				endpoints[endpoint.EndpointID] = struct{}{}
+			}
+			for _, profile := range report.Profiles {
+				for endpointID := range profile.Simulation.EndpointAvailability {
+					endpoints[endpointID] = struct{}{}
+				}
+			}
+			for endpointID := range endpoints {
+				value := 1.0
+				if _, impacted := report.RuntimeActivity.ImpactedEndpoints[endpointID]; impacted {
+					value = 0
+				}
+				ch <- prometheus.MustNewConstMetric(c.endpointRuntime, prometheus.GaugeValue, value, status.Project, endpointID)
+			}
 		}
 
 		for _, decision := range []string{"pass", "warn", "fail", "report"} {

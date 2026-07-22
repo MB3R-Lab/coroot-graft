@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "adapter": {
     "name": "coroot-graft",
-    "version": "0.2.0"
+    "version": "1.0.0"
   },
   "toolchain": {
     "bering": {
@@ -12,8 +12,8 @@
     },
     "sheaft": {
       "repository": "https://github.com/MB3R-Lab/Sheaft",
-      "tag": "v1.0.0",
-      "ref": "fa40ee250b9dbf7f106ea7a0c49e35fdd5105172"
+      "tag": "v1.1.0",
+      "ref": "7f3e8e447762332f0eec5d8cf1938c1250e43302"
     }
   },
   "coroot": {

@@ -11,8 +11,8 @@ services:
         BERING_REPOSITORY: ${BERING_REPOSITORY:-https://github.com/MB3R-Lab/Bering}
         BERING_REF: ${BERING_REF:-d858f09a8cca8edf302646a54b28412d158c0ec2}
         SHEAFT_REPOSITORY: ${SHEAFT_REPOSITORY:-https://github.com/MB3R-Lab/Sheaft}
-        SHEAFT_REF: ${SHEAFT_REF:-fa40ee250b9dbf7f106ea7a0c49e35fdd5105172}
-        VERSION: ${APP_VERSION:-0.2.0}
+        SHEAFT_REF: ${SHEAFT_REF:-7f3e8e447762332f0eec5d8cf1938c1250e43302}
+        VERSION: ${APP_VERSION:-1.0.0}
     image: coroot-graft-local:dev
     restart: always
     command: ["serve", "-config", "/etc/coroot-graft/graft.yaml"]

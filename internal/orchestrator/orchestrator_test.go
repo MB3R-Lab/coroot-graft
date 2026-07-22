@@ -71,6 +71,56 @@ func TestSyncProjectHappyPathAndDashboardInstall(t *testing.T) {
 	}
 }
 
+func TestSyncProjectOverlaysStoppedServiceWithoutRemovingStableTopology(t *testing.T) {
+	mock := newMockCoroot(t)
+	mock.inactiveApps["cluster-a:default:Deployment:checkout"] = true
+	defer mock.Close()
+
+	workDir := t.TempDir()
+	cfg := testConfig(mock.URL(), workDir)
+	cfg.Projects[0].EndpointMode = "trace_http"
+
+	orch, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	orch.tooling = toolchain.NewRunner(helperToolchainConfig(t, "success"))
+
+	status, err := orch.SyncProject(context.Background(), "prod", "cart-stopped")
+	if err != nil {
+		t.Fatalf("SyncProject: %v", err)
+	}
+
+	topologyRaw, err := os.ReadFile(status.TopologyPath)
+	if err != nil {
+		t.Fatalf("read topology: %v", err)
+	}
+	if !strings.Contains(string(topologyRaw), "cluster-a:default:Deployment:checkout") {
+		t.Fatalf("stable topology must retain checkout, got:\n%s", topologyRaw)
+	}
+	if status.Report == nil || status.Report.PolicyEvaluation.Decision != "warn" {
+		t.Fatalf("expected effective runtime warning, got %+v", status.Report)
+	}
+	if got := status.Report.EndpointResults[0].Availability; got != 0 {
+		t.Fatalf("effective endpoint availability = %v, want 0", got)
+	}
+	if status.Report.RuntimeActivity == nil {
+		t.Fatal("expected runtime activity metadata")
+	}
+	missing := status.Report.RuntimeActivity.ImpactedEndpoints["cluster-a:default:Deployment:frontend:GET /checkout"]
+	if len(missing) != 1 || missing[0] != "cluster-a:default:Deployment:checkout" {
+		t.Fatalf("unexpected runtime impact: %+v", status.Report.RuntimeActivity)
+	}
+
+	rawSheaft, err := reporting.Load(status.RawReportPath)
+	if err != nil {
+		t.Fatalf("load raw Sheaft report: %v", err)
+	}
+	if rawSheaft.PolicyEvaluation.Decision != "pass" || rawSheaft.EndpointResults[0].Availability != 0.99 {
+		t.Fatalf("raw Sheaft report must remain unchanged: %+v", rawSheaft)
+	}
+}
+
 func TestSyncProjectRetainsPreviousReportOnFailure(t *testing.T) {
 	mock := newMockCoroot(t)
 	defer mock.Close()
@@ -491,11 +541,12 @@ type mockCoroot struct {
 	server              *httptest.Server
 	dashboardSaveBodies []string
 	dashboardID         string
+	inactiveApps        map[string]bool
 }
 
 func newMockCoroot(t *testing.T) *mockCoroot {
 	t.Helper()
-	mock := &mockCoroot{dashboardID: "dash-1"}
+	mock := &mockCoroot{dashboardID: "dash-1", inactiveApps: map[string]bool{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "coroot_session", Value: "ok"})
@@ -509,23 +560,27 @@ func newMockCoroot(t *testing.T) *mockCoroot {
 		})
 	})
 	mux.HandleFunc("/api/project/prod/overview/map", func(w http.ResponseWriter, r *http.Request) {
-		writeEnvelope(w, map[string]any{
-			"map": []map[string]any{
-				{
-					"id":       "cluster-a:default:Deployment:frontend",
-					"cluster":  "cluster-a",
-					"category": "product",
-					"labels":   map[string]string{"app": "frontend"},
-					"status":   "ok",
-				},
-				{
-					"id":       "cluster-a:default:Deployment:checkout",
-					"cluster":  "cluster-a",
-					"category": "product",
-					"labels":   map[string]string{"app": "checkout"},
-					"status":   "ok",
-				},
+		apps := []map[string]any{
+			{
+				"id":       "cluster-a:default:Deployment:frontend",
+				"cluster":  "cluster-a",
+				"category": "product",
+				"labels":   map[string]string{"app": "frontend"},
+				"status":   "ok",
 			},
+			{
+				"id":       "cluster-a:default:Deployment:checkout",
+				"cluster":  "cluster-a",
+				"category": "product",
+				"labels":   map[string]string{"app": "checkout"},
+				"status":   "ok",
+			},
+		}
+		if isActivityRequest(r) && mock.inactiveApps["cluster-a:default:Deployment:checkout"] {
+			apps = apps[:1]
+		}
+		writeEnvelope(w, map[string]any{
+			"map": apps,
 		})
 	})
 	mux.HandleFunc("/api/project/prod/app/", func(w http.ResponseWriter, r *http.Request) {
@@ -568,10 +623,14 @@ func newMockCoroot(t *testing.T) *mockCoroot {
 				},
 			})
 		case "cluster-a:default:Deployment:checkout":
+			instances := []map[string]any{{"id": "checkout-1"}}
+			if isActivityRequest(r) && mock.inactiveApps[appID] {
+				instances = nil
+			}
 			writeEnvelope(w, map[string]any{
 				"app_map": map[string]any{
 					"application":  map[string]any{"id": appID},
-					"instances":    []map[string]any{{"id": "checkout-1"}},
+					"instances":    instances,
 					"clients":      []any{},
 					"dependencies": []any{},
 				},
@@ -599,6 +658,12 @@ func newMockCoroot(t *testing.T) *mockCoroot {
 
 	mock.server = httptest.NewServer(mux)
 	return mock
+}
+
+func isActivityRequest(r *http.Request) bool {
+	from, fromErr := time.Parse(time.RFC3339, r.URL.Query().Get("from"))
+	to, toErr := time.Parse(time.RFC3339, r.URL.Query().Get("to"))
+	return fromErr == nil && toErr == nil && to.Sub(from) <= config.DefaultActivityWindow
 }
 
 func (m *mockCoroot) URL() string {

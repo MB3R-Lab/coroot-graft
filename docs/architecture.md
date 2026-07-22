@@ -15,11 +15,16 @@
    - `overview/map`
    - `app/{app}`
    - optionally `app/{app}/tracing`
-3. It converts the Coroot snapshot into explicit Bering `topology_api` input.
-4. It runs `bering discover`.
-5. It runs `sheaft run` on the produced Bering snapshot artifact.
-6. It stores run artifacts under `.coroot-graft/projects/{project}/`.
-7. It exports latest results as Prometheus metrics and optionally installs a managed Coroot dashboard.
+3. It reads the same Coroot surfaces over two windows:
+   - a stable topology window, default `1h`
+   - a runtime activity window, default `2m`
+4. It converts the stable Coroot snapshot into explicit Bering `topology_api` input.
+5. It runs `bering discover`.
+6. It runs `sheaft run` on the produced Bering snapshot artifact.
+7. It computes endpoint runtime impact from the blocking synchronous dependency
+   closure and overlays that impact onto a separate effective report.
+8. It stores raw Sheaft and effective artifacts under `.coroot-graft/projects/{project}/`.
+9. It exports latest results as Prometheus metrics and optionally installs a managed Coroot dashboard.
 
 ## Snapshot Layers
 
@@ -35,6 +40,7 @@ It contains:
 - dependencies
 - replica counts
 - optional traced endpoints
+- services observed in the short runtime activity window
 
 It is collected from Coroot HTTP APIs on every startup, interval sync, webhook-triggered sync, or manual `sync` run.
 
@@ -57,32 +63,47 @@ This is upstream `Bering`'s emitted `io.mb3r.bering.snapshot@1.3.0` artifact.
 
 It is the canonical MB3R discovery artifact later consumed by `Sheaft`.
 
-## Posture Versus Health
+## Stable Topology Versus Current Observation
 
-`coroot-graft` publishes resilience posture, not live health status.
+`coroot-graft` deliberately keeps two views instead of deleting a stopped
+service from the architecture:
 
-That distinction matters.
+- stable topology says which services and blocking dependencies are part of the system
+- current observation says which of those services Coroot saw in the short activity window
 
-Coroot built-in views answer:
+The stable topology is sent to Bering and Sheaft. The raw Sheaft report therefore
+continues to answer architectural resilience questions without topology churn.
 
-- what is unhealthy right now?
-- which service is down?
-- which alerts or incidents are active?
+After Sheaft finishes, `coroot-graft` walks each endpoint's entry service and
+transitive blocking synchronous dependencies. If any required service is absent
+from the activity window, that endpoint is forced to availability `0` in the
+effective report. Async dependencies do not block the endpoint.
 
-`coroot-graft` answers:
+Example:
 
-- how resilient is the currently observed topology under configured failure modes?
-- which entrypoints are most fragile?
-- does this topology pass the resilience gate?
+```text
+stable topology:     frontend -> checkout -> cart
+current observation: frontend, checkout
+effective result:    endpoints requiring cart = 0
+```
 
-In other words:
+This mirrors the OpenTelemetry Demo integration: the stable model remains
+available for simulation while a short observation window supplies live journey
+impact.
 
-- Coroot health is observed runtime state.
-- Sheaft posture is simulated resilience over the current discovered model.
+The runtime overlay is not a replacement for full Coroot health diagnostics. It
+shows that a service was not observed and which modeled paths are affected; it
+does not determine the root cause or replace alert, incident, CPU, memory,
+latency, and error views.
 
-Because of that, posture is recomputed every sync, but it only changes when the discovered model or analysis inputs change.
+Detection is windowed. A stopped service changes the effective dashboard after
+it leaves `activity_window` and the next sync completes.
 
-Stopping a runtime service does not automatically change posture if Coroot still exposes the same topology membership and dependency graph in the source snapshot.
+Artifacts are kept separate:
+
+- `sheaft-report.json` and `sheaft-summary.md`: raw stable-topology result
+- `report.json` and `summary.md`: effective runtime-adjusted result
+- `runtime-activity.json`: active/inactive services and impacted endpoints
 
 ## Service IDs
 
@@ -146,5 +167,9 @@ Results are published back to Coroot through documented or observable external s
 - Coroot topology extraction uses authenticated HTTP APIs rather than a formal extension SDK because Coroot does not expose a dedicated extension SDK in `main.go`.
 - Dashboard installation relies on the observed Coroot dashboard API contract from the server source, not on a public dashboard-import API.
 - When `trace_http` is disabled or Coroot tracing is unavailable, endpoint coverage is service-level rather than per-route.
-- In the current MVP, topology membership is primarily driven by Coroot application inventory rather than a trace-only rolling discovery window.
-- As a result, `coroot-graft` should be read as "live recomputed posture from current Coroot-derived topology", not as a direct live health score.
+- Runtime activity is a short-window Coroot observation, not an instantaneous
+  container-runtime probe. Very quiet services can require a wider
+  `activity_window` to avoid observation gaps.
+- Endpoint runtime impact follows the blocking synchronous graph. Route-specific
+  dependency differences still require traced endpoints or explicit topology
+  shaping.

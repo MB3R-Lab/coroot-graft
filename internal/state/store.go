@@ -9,19 +9,22 @@ import (
 )
 
 type ProjectStatus struct {
-	Project      string            `json:"project"`
-	Trigger      string            `json:"trigger"`
-	Status       string            `json:"status"`
-	Error        string            `json:"error,omitempty"`
-	StartedAt    time.Time         `json:"started_at"`
-	FinishedAt   time.Time         `json:"finished_at"`
-	RunDir       string            `json:"run_dir,omitempty"`
-	TopologyPath string            `json:"topology_path,omitempty"`
-	ModelPath    string            `json:"model_path,omitempty"`
-	SnapshotPath string            `json:"snapshot_path,omitempty"`
-	ReportPath   string            `json:"report_path,omitempty"`
-	SummaryPath  string            `json:"summary_path,omitempty"`
-	Report       *reporting.Report `json:"report,omitempty"`
+	Project        string            `json:"project"`
+	Trigger        string            `json:"trigger"`
+	Status         string            `json:"status"`
+	Error          string            `json:"error,omitempty"`
+	StartedAt      time.Time         `json:"started_at"`
+	FinishedAt     time.Time         `json:"finished_at"`
+	RunDir         string            `json:"run_dir,omitempty"`
+	TopologyPath   string            `json:"topology_path,omitempty"`
+	ModelPath      string            `json:"model_path,omitempty"`
+	SnapshotPath   string            `json:"snapshot_path,omitempty"`
+	ReportPath     string            `json:"report_path,omitempty"`
+	SummaryPath    string            `json:"summary_path,omitempty"`
+	RawReportPath  string            `json:"raw_sheaft_report_path,omitempty"`
+	RawSummaryPath string            `json:"raw_sheaft_summary_path,omitempty"`
+	ActivityPath   string            `json:"runtime_activity_path,omitempty"`
+	Report         *reporting.Report `json:"report,omitempty"`
 }
 
 type Store struct {

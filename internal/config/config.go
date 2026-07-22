@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	DefaultListenAddress = ":8095"
-	DefaultStorageDir    = ".coroot-graft"
-	DefaultSyncTimeout   = 10 * time.Minute
-	DefaultHTTPTimeout   = 30 * time.Second
-	DefaultTimeWindow    = time.Hour
+	DefaultListenAddress  = ":8095"
+	DefaultStorageDir     = ".coroot-graft"
+	DefaultSyncTimeout    = 10 * time.Minute
+	DefaultHTTPTimeout    = 30 * time.Second
+	DefaultTimeWindow     = time.Hour
+	DefaultActivityWindow = 2 * time.Minute
 )
 
 type Config struct {
@@ -30,11 +31,12 @@ type Config struct {
 }
 
 type CorootConfig struct {
-	BaseURL     string        `yaml:"base_url"`
-	Email       string        `yaml:"email"`
-	Password    string        `yaml:"password"`
-	HTTPTimeout time.Duration `yaml:"http_timeout"`
-	TimeWindow  time.Duration `yaml:"time_window"`
+	BaseURL        string        `yaml:"base_url"`
+	Email          string        `yaml:"email"`
+	Password       string        `yaml:"password"`
+	HTTPTimeout    time.Duration `yaml:"http_timeout"`
+	TimeWindow     time.Duration `yaml:"time_window"`
+	ActivityWindow time.Duration `yaml:"activity_window"`
 }
 
 type ToolchainConfig struct {
@@ -53,6 +55,7 @@ type ProjectConfig struct {
 	CorootProject      string          `yaml:"coroot_project"`
 	Interval           time.Duration   `yaml:"interval"`
 	TimeWindow         time.Duration   `yaml:"time_window"`
+	ActivityWindow     time.Duration   `yaml:"activity_window"`
 	OverlayPath        string          `yaml:"overlay"`
 	AnalysisPath       string          `yaml:"analysis"`
 	PolicyPath         string          `yaml:"policy"`
@@ -116,6 +119,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Coroot.TimeWindow <= 0 {
 		c.Coroot.TimeWindow = DefaultTimeWindow
+	}
+	if c.Coroot.ActivityWindow <= 0 {
+		c.Coroot.ActivityWindow = DefaultActivityWindow
 	}
 	if len(c.Toolchain.Bering.Command) == 0 {
 		c.Toolchain.Bering.Command = []string{"bering"}
@@ -213,6 +219,17 @@ func (c Config) Validate() error {
 		if err := p.Validate(i); err != nil {
 			return err
 		}
+		topologyWindow := c.Coroot.TimeWindow
+		if p.TimeWindow > 0 {
+			topologyWindow = p.TimeWindow
+		}
+		activityWindow := c.Coroot.ActivityWindow
+		if p.ActivityWindow > 0 {
+			activityWindow = p.ActivityWindow
+		}
+		if activityWindow > topologyWindow {
+			return fmt.Errorf("projects[%d].activity_window (%s) must not exceed time_window (%s)", i, activityWindow, topologyWindow)
+		}
 	}
 	return nil
 }
@@ -236,6 +253,9 @@ func (c CorootConfig) Validate() error {
 	}
 	if c.TimeWindow <= 0 {
 		return errors.New("coroot.time_window must be > 0")
+	}
+	if c.ActivityWindow <= 0 {
+		return errors.New("coroot.activity_window must be > 0")
 	}
 	return nil
 }
@@ -275,6 +295,9 @@ func (p ProjectConfig) Validate(idx int) error {
 	}
 	if p.TimeWindow < 0 {
 		return fmt.Errorf("%s.time_window must be >= 0", scope)
+	}
+	if p.ActivityWindow < 0 {
+		return fmt.Errorf("%s.activity_window must be >= 0", scope)
 	}
 	if p.AnalysisPath == "" && p.PolicyPath == "" {
 		return fmt.Errorf("%s must define analysis or policy", scope)
